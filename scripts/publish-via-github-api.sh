@@ -37,7 +37,6 @@ request() {
 }
 
 PARENT=$(request GET "$API/git/ref/heads/$BRANCH" | jq -er '.object.sha')
-BASE_TREE=$(request GET "$API/git/commits/$PARENT" | jq -er '.tree.sha')
 printf '[]\n' > "$WORK/entries.json"
 
 while IFS= read -r file; do
@@ -51,8 +50,10 @@ while IFS= read -r file; do
   mv "$WORK/entries.next.json" "$WORK/entries.json"
 done < <(git ls-tree -r --name-only "$SOURCE_COMMIT")
 
-jq -n --arg base_tree "$BASE_TREE" --slurpfile tree "$WORK/entries.json" \
-  '{base_tree:$base_tree,tree:$tree[0]}' > "$WORK/tree-request.json"
+# Build a complete tree from the source commit. Supplying base_tree here would
+# preserve remote paths that were deleted locally, producing an invalid mirror.
+jq -n --slurpfile tree "$WORK/entries.json" \
+  '{tree:$tree[0]}' > "$WORK/tree-request.json"
 TREE=$(request POST "$API/git/trees" "$WORK/tree-request.json" | jq -er '.sha')
 MESSAGE=$(git log -1 --format=%B "$SOURCE_COMMIT")
 jq -n --arg message "$MESSAGE" --arg tree "$TREE" --arg parent "$PARENT" \
