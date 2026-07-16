@@ -98,9 +98,26 @@ func (b *Broker) VerifyCurrent(checks []config.Check) (protocol.CompletionReceip
 }
 
 func (b *Broker) AdmitManaged(m *worktree.Manager, proposal, source string) (protocol.CompletionReceipt, error) {
+	return b.AdmitManagedWithReason(m, proposal, source, "terminal_candidate_regressed")
+}
+
+// AdmitManagedWithReason evaluates a terminal candidate and records why an
+// older checkpoint was selected when terminal admission fails.
+func (b *Broker) AdmitManagedWithReason(m *worktree.Manager, proposal, source, recoveryReason string) (protocol.CompletionReceipt, error) {
+	return b.admitManaged(m, proposal, source, true, recoveryReason)
+}
+
+// AdmitIntermediate evaluates a candidate boundary without falling back to an
+// older checkpoint. Recovery is reserved for terminal completion selection.
+func (b *Broker) AdmitIntermediate(m *worktree.Manager, proposal, source string) (protocol.CompletionReceipt, error) {
+	return b.admitManaged(m, proposal, source, false, "")
+}
+
+func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, recoverTerminal bool, recoveryReason string) (protocol.CompletionReceipt, error) {
 	if err := b.event("TASK_CREATED", map[string]any{"mode": b.State.Mode}); err != nil {
 		return protocol.CompletionReceipt{}, err
 	}
+	previousCheckpoint := cloneCheckpoint(b.State.Checkpoint)
 	b.State.ProposalPath = proposal
 	head, err := identity.Git(m.Root, "rev-parse", "HEAD")
 	if err != nil {
@@ -115,36 +132,31 @@ func (b *Broker) AdmitManaged(m *worktree.Manager, proposal, source string) (pro
 	}
 	commit, err := m.CommitCandidate(proposal)
 	if err != nil {
+		if recoverTerminal && previousCheckpoint != nil {
+			return b.recertifyCheckpoint(m, previousCheckpoint, "", recoveryReason)
+		}
 		return b.finish(protocol.VerdictAbstained, nil, nil, err.Error())
 	}
 	eval, cleanup, err := m.Evaluator(commit)
 	if err != nil {
+		if recoverTerminal && previousCheckpoint != nil {
+			return b.recertifyCheckpoint(m, previousCheckpoint, "", recoveryReason)
+		}
 		return b.finish(protocol.VerdictAbstained, nil, nil, err.Error())
 	}
 	defer cleanup()
 	tree, err := identity.Tree(eval, b.Policy.State.Include)
 	if err != nil {
-		return b.finish(protocol.VerdictAbstained, nil, nil, err.Error())
-	}
-	if unsafe, err := identity.UnsafeSymlinks(eval); err != nil || len(unsafe) > 0 {
-		if err != nil {
-			return b.finish(protocol.VerdictAbstained, b.State.Checkpoint, nil, err.Error())
+		if recoverTerminal && previousCheckpoint != nil {
+			return b.recertifyCheckpoint(m, previousCheckpoint, "", recoveryReason)
 		}
-		return b.finish(protocol.VerdictRejected, b.State.Checkpoint, nil, "symlink escapes repository: "+unsafe[0])
-	}
-	files, err := m.ChangedFiles(m.Base, commit)
-	if err != nil {
 		return b.finish(protocol.VerdictAbstained, nil, nil, err.Error())
-	}
-	for _, file := range files {
-		protected := file == "seal.yaml" || identity.MatchesAny(file, b.Policy.State.Protected)
-		if protected && !b.Policy.AllowsProtected(file, time.Now().UTC()) {
-			b.event("PROTECTED_PATH_REJECTED", map[string]any{"path": file})
-			return b.finish(protocol.VerdictRejected, nil, nil, "protected path changed: "+file)
-		}
 	}
 	baseTree, err := identity.Tree(m.Root, b.Policy.State.Include)
 	if err != nil {
+		if recoverTerminal && previousCheckpoint != nil {
+			return b.recertifyCheckpoint(m, previousCheckpoint, "", recoveryReason)
+		}
 		return b.finish(protocol.VerdictAbstained, b.State.Checkpoint, nil, err.Error())
 	}
 	patch, _ := identity.Git(m.Root, "diff", "--binary", m.Base, commit)
@@ -154,7 +166,36 @@ func (b *Broker) AdmitManaged(m *worktree.Manager, proposal, source string) (pro
 	b.State.Candidate = &candidate
 	b.State.Status = "VERIFYING"
 	b.event("CANDIDATE_SUBMITTED", map[string]any{"candidate_id": candidate.CandidateID, "tree_sha256": tree, "commit": commit})
-	admission, err := verifier.Run(eval, candidate.CandidateID, tree, b.PolicyHash, b.Policy.Admission.Checks)
+	if unsafe, err := identity.UnsafeSymlinks(eval); err != nil || len(unsafe) > 0 {
+		if err != nil {
+			if recoverTerminal && previousCheckpoint != nil {
+				return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, recoveryReason)
+			}
+			return b.finish(protocol.VerdictAbstained, b.State.Checkpoint, nil, err.Error())
+		}
+		if recoverTerminal && previousCheckpoint != nil {
+			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, recoveryReason)
+		}
+		return b.finish(protocol.VerdictRejected, b.State.Checkpoint, nil, "symlink escapes repository: "+unsafe[0])
+	}
+	files, err := m.ChangedFiles(m.Base, commit)
+	if err != nil {
+		if recoverTerminal && previousCheckpoint != nil {
+			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, recoveryReason)
+		}
+		return b.finish(protocol.VerdictAbstained, nil, nil, err.Error())
+	}
+	for _, file := range files {
+		protected := file == "seal.yaml" || identity.MatchesAny(file, b.Policy.State.Protected)
+		if protected && !b.Policy.AllowsProtected(file, time.Now().UTC()) {
+			b.event("PROTECTED_PATH_REJECTED", map[string]any{"path": file})
+			if recoverTerminal && previousCheckpoint != nil {
+				return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, recoveryReason)
+			}
+			return b.finish(protocol.VerdictRejected, nil, nil, "protected path changed: "+file)
+		}
+	}
+	admission, err := verifier.RunWithBudget(eval, candidate.CandidateID, tree, b.PolicyHash, b.Policy.Admission.Checks, time.Duration(b.Policy.Admission.TimeoutSeconds)*time.Second)
 	b.State.Evidence = append(b.State.Evidence, admission...)
 	if err != nil {
 		return b.finish(protocol.VerdictAbstained, nil, admission, err.Error())
@@ -165,6 +206,9 @@ func (b *Broker) AdmitManaged(m *worktree.Manager, proposal, source string) (pro
 	}
 	if !verifier.Passed(admission, len(b.Policy.Admission.Checks)) {
 		b.event("CANDIDATE_REJECTED", map[string]any{"reason": "admission check failed"})
+		if recoverTerminal && previousCheckpoint != nil {
+			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, recoveryReason)
+		}
 		return b.finish(protocol.VerdictRejected, b.State.Checkpoint, admission, "admission check failed; last verified checkpoint was preserved")
 	}
 	cp := &protocol.VerifiedCheckpoint{CheckpointID: identity.ID("cp"), CandidateID: candidate.CandidateID,
@@ -183,22 +227,66 @@ func (b *Broker) AdmitManaged(m *worktree.Manager, proposal, source string) (pro
 	if err != nil || freshTree != cp.TreeSHA256 {
 		return b.finish(protocol.VerdictStale, cp, admission, "checkpoint tree could not be reproduced")
 	}
-	completion, err := verifier.Run(freshEval, candidate.CandidateID, freshTree, b.PolicyHash, b.Policy.Completion.Checks)
+	completion, err := verifier.RunWithBudget(freshEval, candidate.CandidateID, freshTree, b.PolicyHash, b.Policy.Completion.Checks, time.Duration(b.Policy.Completion.TimeoutSeconds)*time.Second)
 	b.State.Evidence = append(b.State.Evidence, completion...)
 	if err != nil {
 		return b.finish(protocol.VerdictAbstained, cp, completion, err.Error())
 	}
 	if !verifier.Passed(completion, len(b.Policy.Completion.Checks)) {
+		if recoverTerminal && previousCheckpoint != nil && previousCheckpoint.CheckpointID != cp.CheckpointID {
+			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, "terminal_completion_failed")
+		}
 		return b.finish(protocol.VerdictRejected, cp, completion, "fresh completion recertification failed")
 	}
 	b.event("COMPLETION_RECERTIFIED", map[string]any{"checkpoint_id": cp.CheckpointID})
 	return b.finish(protocol.VerdictAdmitted, cp, completion, "")
 }
 
+func (b *Broker) recertifyCheckpoint(m *worktree.Manager, cp *protocol.VerifiedCheckpoint, terminalCandidate, selectionReason string) (protocol.CompletionReceipt, error) {
+	b.State.Checkpoint = cp
+	_ = b.event("REGRESSION_DETECTED", map[string]any{
+		"terminal_candidate": terminalCandidate,
+		"checkpoint_id":      cp.CheckpointID,
+		"reason":             selectionReason,
+	})
+	_ = b.event("CHECKPOINT_SELECTED", map[string]any{
+		"checkpoint_id": cp.CheckpointID,
+		"reason":        selectionReason,
+	})
+	eval, cleanup, err := m.Evaluator(cp.Commit)
+	if err != nil {
+		return b.finishSelected(protocol.VerdictAbstained, cp, nil, err.Error(), terminalCandidate, selectionReason, false)
+	}
+	defer cleanup()
+	tree, err := identity.Tree(eval, b.Policy.State.Include)
+	if err != nil {
+		return b.finishSelected(protocol.VerdictAbstained, cp, nil, err.Error(), terminalCandidate, selectionReason, false)
+	}
+	if tree != cp.TreeSHA256 {
+		return b.finishSelected(protocol.VerdictStale, cp, nil, "selected checkpoint tree could not be reproduced", terminalCandidate, selectionReason, false)
+	}
+	evidence, err := verifier.RunWithBudget(eval, cp.CandidateID, tree, b.PolicyHash, b.Policy.Completion.Checks, time.Duration(b.Policy.Completion.TimeoutSeconds)*time.Second)
+	b.State.Evidence = append(b.State.Evidence, evidence...)
+	if err != nil {
+		return b.finishSelected(protocol.VerdictAbstained, cp, evidence, err.Error(), terminalCandidate, selectionReason, false)
+	}
+	if !verifier.Passed(evidence, len(b.Policy.Completion.Checks)) {
+		return b.finishSelected(protocol.VerdictRejected, cp, evidence, "selected checkpoint failed fresh completion recertification", terminalCandidate, selectionReason, false)
+	}
+	_ = b.event("CHECKPOINT_RESTORED", map[string]any{"checkpoint_id": cp.CheckpointID, "tree_sha256": tree})
+	_ = b.event("COMPLETION_RECERTIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "recovered": true})
+	return b.finishSelected(protocol.VerdictAdmitted, cp, evidence, "", terminalCandidate, selectionReason, true)
+}
+
 func (b *Broker) finish(verdict protocol.Verdict, cp *protocol.VerifiedCheckpoint, evidence []protocol.EvidenceEnvelope, reason string) (protocol.CompletionReceipt, error) {
+	return b.finishSelected(verdict, cp, evidence, reason, "", "", false)
+}
+
+func (b *Broker) finishSelected(verdict protocol.Verdict, cp *protocol.VerifiedCheckpoint, evidence []protocol.EvidenceEnvelope, reason, terminalCandidate, selectionReason string, recovered bool) (protocol.CompletionReceipt, error) {
 	receipt := protocol.CompletionReceipt{ReceiptVersion: protocol.Version, ReceiptID: identity.ID("rcpt"),
 		TaskID: b.State.TaskID, Verdict: verdict, PolicyDigest: b.PolicyHash, IssuedBy: "local-broker",
-		IssuedAt: time.Now().UTC(), ResidualRisks: b.Policy.ResidualRisks, Reason: reason}
+		IssuedAt: time.Now().UTC(), ResidualRisks: b.Policy.ResidualRisks, Reason: reason,
+		TerminalCandidate: terminalCandidate, SelectionReason: selectionReason, Recovered: recovered}
 	if len(receipt.ResidualRisks) == 0 {
 		receipt.ResidualRisks = []string{"Only configured checks were evaluated."}
 	}
@@ -225,6 +313,15 @@ func (b *Broker) finish(verdict protocol.Verdict, cp *protocol.VerifiedCheckpoin
 	}
 	_ = path
 	return receipt, err
+}
+
+func cloneCheckpoint(cp *protocol.VerifiedCheckpoint) *protocol.VerifiedCheckpoint {
+	if cp == nil {
+		return nil
+	}
+	copy := *cp
+	copy.AdmissionEvidence = append([]string(nil), cp.AdmissionEvidence...)
+	return &copy
 }
 
 func evidenceIDs(es []protocol.EvidenceEnvelope) []string {

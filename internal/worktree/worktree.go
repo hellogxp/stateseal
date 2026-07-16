@@ -135,6 +135,19 @@ func (m *Manager) ChangedFiles(base, commit string) ([]string, error) {
 	return files, nil
 }
 
+// Restore resets a managed proposal to an exact checkpoint. Ignored local
+// dependencies are preserved, while every tracked and untracked candidate
+// artifact is removed before the checkpoint is used again.
+func (m *Manager) Restore(proposal, commit string) error {
+	if _, err := identity.Git(proposal, "reset", "--hard", commit); err != nil {
+		return err
+	}
+	if _, err := identity.Git(proposal, "clean", "-fd"); err != nil {
+		return err
+	}
+	return m.linkIgnoredDependencies(proposal)
+}
+
 func sanitize(s string) string {
 	s = strings.ToLower(s)
 	var b strings.Builder

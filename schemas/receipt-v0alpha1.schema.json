@@ -18,6 +18,9 @@
     "issued_at": {"type": "string", "format": "date-time"},
     "residual_risks": {"type": "array", "minItems": 1, "items": {"type": "string"}},
     "reason": {"type": "string"},
+    "terminal_candidate": {"type": "string"},
+    "selection_reason": {"type": "string"},
+    "recovered": {"type": "boolean"},
     "receipt_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
   }
 }

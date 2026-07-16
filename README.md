@@ -19,6 +19,8 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 
 The broker, not the agent, owns admission. Failed proposals do not overwrite a verified checkpoint.
 
+When a terminal candidate regresses after an earlier checkpoint was verified, StateSeal selects that checkpoint, materializes it in a fresh evaluator, reruns completion checks, and records the recovered selection in the completion receipt.
+
 ## Quick start
 
 Requirements: Git and Go 1.24 or newer.
@@ -55,12 +57,14 @@ state:
   protected: [".github/workflows/**", ".stateseal/**"]
 
 admission:
+  timeout_seconds: 300
   checks:
     - id: targeted-tests
       command: ["go", "test", "./internal/payment/..."]
       timeout_seconds: 300
 
 completion:
+  timeout_seconds: 900
   checks:
     - id: full-suite
       command: ["go", "test", "./..."]

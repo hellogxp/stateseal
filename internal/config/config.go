@@ -13,15 +13,18 @@ import (
 type Check struct {
 	ID             string   `yaml:"id" json:"id"`
 	Command        []string `yaml:"command" json:"command"`
+	CWD            string   `yaml:"cwd,omitempty" json:"cwd,omitempty"`
 	TimeoutSeconds int      `yaml:"timeout_seconds" json:"timeout_seconds"`
 }
 
 type CheckSet struct {
-	Checks []Check `yaml:"checks" json:"checks"`
+	Checks         []Check `yaml:"checks" json:"checks"`
+	TimeoutSeconds int     `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
 }
 
 type Completion struct {
 	Checks                    []Check `yaml:"checks" json:"checks"`
+	TimeoutSeconds            int     `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
 	RecertifyLatestCheckpoint bool    `yaml:"recertify_latest_checkpoint" json:"recertify_latest_checkpoint"`
 	OnMissingEvidence         string  `yaml:"on_missing_evidence" json:"on_missing_evidence"`
 	OnStaleEvidence           string  `yaml:"on_stale_evidence" json:"on_stale_evidence"`
@@ -67,7 +70,9 @@ func Default(taskID string, checks []Check) Policy {
 	p.State.Include = []string{"**"}
 	p.State.Protected = []string{"seal.yaml", ".git/**", ".stateseal/**", ".github/workflows/**"}
 	p.Admission.Checks = checks
+	p.Admission.TimeoutSeconds = 900
 	p.Completion.Checks = checks
+	p.Completion.TimeoutSeconds = 900
 	p.Completion.RecertifyLatestCheckpoint = true
 	p.Completion.OnMissingEvidence = "abstain"
 	p.Completion.OnStaleEvidence = "reject"
@@ -119,6 +124,9 @@ func (p Policy) Validate() error {
 			}
 			ids[c.ID] = true
 		}
+	}
+	if p.Admission.TimeoutSeconds < 0 || p.Completion.TimeoutSeconds < 0 {
+		return errors.New("check-set timeout_seconds cannot be negative")
 	}
 	if !p.Execution.CleanWorktree {
 		return fmt.Errorf("execution.clean_worktree must be true for the v0alpha1 backend")

@@ -68,6 +68,9 @@ type CompletionReceipt struct {
 	IssuedAt           time.Time `json:"issued_at"`
 	ResidualRisks      []string  `json:"residual_risks"`
 	Reason             string    `json:"reason,omitempty"`
+	TerminalCandidate  string    `json:"terminal_candidate,omitempty"`
+	SelectionReason    string    `json:"selection_reason,omitempty"`
+	Recovered          bool      `json:"recovered,omitempty"`
 	ReceiptDigest      string    `json:"receipt_digest"`
 }
 

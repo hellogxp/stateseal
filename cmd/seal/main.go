@@ -16,6 +16,7 @@ import (
 	"github.com/hellogxp/stateseal/internal/broker"
 	"github.com/hellogxp/stateseal/internal/config"
 	"github.com/hellogxp/stateseal/internal/identity"
+	processctl "github.com/hellogxp/stateseal/internal/process"
 	"github.com/hellogxp/stateseal/internal/store"
 	"github.com/hellogxp/stateseal/internal/worktree"
 	"github.com/hellogxp/stateseal/pkg/protocol"
@@ -42,6 +43,10 @@ type codedError struct {
 
 func (e codedError) Error() string { return e.err.Error() }
 func (e codedError) ExitCode() int { return e.code }
+
+type staleStateError struct{ reason string }
+
+func (e staleStateError) Error() string { return e.reason }
 
 func newRoot() *cobra.Command {
 	cmd := &cobra.Command{Use: "seal", Short: "Transactional admission for coding-agent changes", SilenceUsage: true, SilenceErrors: true}
@@ -158,9 +163,11 @@ func runCmd() *cobra.Command {
 		ctx, cancel := context.WithTimeout(context.Background(), maxWall)
 		defer cancel()
 		agent := exec.CommandContext(ctx, args[0], args[1:]...)
+		processctl.ConfigureGroup(agent)
 		agent.Dir, agent.Stdin, agent.Stdout, agent.Stderr = proposal, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
 		agent.Env = append(os.Environ(), "STATESEAL_TASK_ID="+b.State.TaskID, "STATESEAL_PROPOSAL_ROOT="+proposal, "STATESEAL_ORIGINAL_ROOT="+root, "STATESEAL_SUBMIT_DIR="+requestDir)
 		agentErr := agent.Run()
+		_ = processctl.KillGroup(agent)
 		close(stopBroker)
 		<-brokerDone
 		if ctx.Err() != nil {
@@ -169,7 +176,13 @@ func runCmd() *cobra.Command {
 		if agentErr != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Agent exited with an error; terminal candidate will still be evaluated: %v\n", agentErr)
 		}
-		r, err := b.AdmitManaged(m, proposal, source)
+		recoveryReason := "terminal_candidate_regressed"
+		if ctx.Err() != nil {
+			recoveryReason = "wall_budget_exhausted"
+		} else if agentErr != nil {
+			recoveryReason = "agent_exit_error"
+		}
+		r, err := b.AdmitManagedWithReason(m, proposal, source, recoveryReason)
 		if err != nil {
 			return codedError{11, err}
 		}
@@ -268,7 +281,7 @@ func serveSubmissions(stop <-chan struct{}, done chan<- struct{}, dir string, b 
 				if err == nil {
 					processed++
 					b.State.Coverage = "intermediate + terminal"
-					receipt, err = b.AdmitManaged(m, proposal, source+"-intermediate")
+					receipt, err = b.AdmitIntermediate(m, proposal, source+"-intermediate")
 				}
 				response := struct {
 					Receipt protocol.CompletionReceipt `json:"receipt"`
@@ -307,6 +320,9 @@ func statusCmd() *cobra.Command {
 		}
 		if state.Receipt != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Receipt:    %s\n", state.Receipt.ReceiptID)
+			if state.Receipt.Recovered {
+				fmt.Fprintf(cmd.OutOrStdout(), "Recovered:  yes (%s)\n", state.Receipt.SelectionReason)
+			}
 		}
 		return nil
 	}}
@@ -340,6 +356,10 @@ func applyCmd() *cobra.Command {
 			return codedError{10, err}
 		}
 		if err := applyCheckpoint(state.RepoRoot, state, branch); err != nil {
+			var stale staleStateError
+			if errors.As(err, &stale) {
+				return codedError{3, err}
+			}
 			return codedError{11, err}
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Verified checkpoint applied.")
@@ -361,6 +381,9 @@ func explainCmd() *cobra.Command {
 		}
 		switch state.Status {
 		case "ADMITTED":
+			if state.Receipt != nil && state.Receipt.Recovered {
+				fmt.Fprintf(cmd.OutOrStdout(), "Selected checkpoint %s after %s and freshly recertified it.\n", state.Receipt.CheckpointID, state.Receipt.SelectionReason)
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "Next: inspect with `seal diff`, then use `seal apply`.")
 		case "REJECTED":
 			fmt.Fprintln(cmd.OutOrStdout(), "Next: fix the failing check in the proposal worktree and run again.")
@@ -397,8 +420,23 @@ func restoreCmd() *cobra.Command {
 		if len(args) == 1 && args[0] != state.Checkpoint.CheckpointID {
 			return codedError{10, fmt.Errorf("unknown checkpoint %q", args[0])}
 		}
-		if _, err := identity.Git(state.ProposalPath, "reset", "--hard", state.Checkpoint.Commit); err != nil {
+		m, err := worktree.New(state.RepoRoot, state.TaskID)
+		if err != nil {
 			return codedError{11, err}
+		}
+		if err := m.Restore(state.ProposalPath, state.Checkpoint.Commit); err != nil {
+			return codedError{11, err}
+		}
+		policy, _, err := config.Load(state.RepoRoot)
+		if err != nil {
+			return codedError{10, err}
+		}
+		tree, err := identity.Tree(state.ProposalPath, policy.State.Include)
+		if err != nil {
+			return codedError{11, err}
+		}
+		if tree != state.Checkpoint.TreeSHA256 {
+			return codedError{3, fmt.Errorf("restored checkpoint tree does not match the ledger")}
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Proposal restored to %s.\n", state.Checkpoint.CheckpointID)
 		return nil
@@ -498,21 +536,26 @@ func applyCheckpoint(root string, state protocol.TaskState, branch string) error
 	policyDigest := rawPolicyDigest(root)
 	freshness, reason := stateFreshness(root, policyDigest, state)
 	if freshness != "CURRENT" {
-		return fmt.Errorf("admission is stale: %s", reason)
+		return staleStateError{reason: "admission is stale: " + reason}
 	}
 	dirty, _ := identity.Git(root, "status", "--porcelain")
 	if len(bytes.TrimSpace(dirty)) > 0 {
 		return fmt.Errorf("current worktree is dirty")
 	}
-	if branch != "" {
-		if _, err := identity.Git(root, "switch", "-c", branch); err != nil {
-			return err
-		}
-	}
 	if state.Checkpoint.Commit == state.BaseCommit {
 		return nil
 	}
-	_, err := identity.Git(root, "cherry-pick", state.Checkpoint.Commit)
+	if _, err := identity.Git(root, "merge-base", "--is-ancestor", state.BaseCommit, state.Checkpoint.Commit); err != nil {
+		return fmt.Errorf("checkpoint is not descended from the trusted base: %w", err)
+	}
+	if branch != "" {
+		if _, err := identity.Git(root, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
+			return fmt.Errorf("branch %q already exists", branch)
+		}
+		_, err := identity.Git(root, "switch", "-c", branch, state.Checkpoint.Commit)
+		return err
+	}
+	_, err := identity.Git(root, "merge", "--ff-only", state.Checkpoint.Commit)
 	return err
 }
 
@@ -549,6 +592,9 @@ func printReceipt(cmd *cobra.Command, r protocol.CompletionReceipt) {
 	if r.Reason != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "Reason:  %s\n", r.Reason)
 	}
+	if r.Recovered {
+		fmt.Fprintf(cmd.OutOrStdout(), "Recovered checkpoint: %s\nTerminal candidate:  %s\nSelection reason:    %s\n", r.CheckpointID, r.TerminalCandidate, r.SelectionReason)
+	}
 	fmt.Fprintln(cmd.OutOrStdout(), "Residual risk:")
 	for _, risk := range r.ResidualRisks {
 		fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", risk)
@@ -556,7 +602,11 @@ func printReceipt(cmd *cobra.Command, r protocol.CompletionReceipt) {
 	if summary := os.Getenv("GITHUB_STEP_SUMMARY"); summary != "" {
 		if f, err := os.OpenFile(summary, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
 			defer f.Close()
-			fmt.Fprintf(f, "## StateSeal — %s\n\n| Field | Value |\n| --- | --- |\n| Receipt | `%s` |\n| Tree | `%s` |\n| Policy | `%s` |\n\n### Residual risk\n\n", r.Verdict, r.ReceiptID, short(r.TreeSHA256), short(r.PolicyDigest))
+			fmt.Fprintf(f, "## StateSeal — %s\n\n| Field | Value |\n| --- | --- |\n| Receipt | `%s` |\n| Tree | `%s` |\n| Policy | `%s` |\n", r.Verdict, r.ReceiptID, short(r.TreeSHA256), short(r.PolicyDigest))
+			if r.Recovered {
+				fmt.Fprintf(f, "| Recovered | yes |\n| Selection reason | `%s` |\n", r.SelectionReason)
+			}
+			fmt.Fprint(f, "\n### Residual risk\n\n")
 			for _, risk := range r.ResidualRisks {
 				fmt.Fprintf(f, "- %s\n", risk)
 			}

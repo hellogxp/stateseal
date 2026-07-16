@@ -13,8 +13,9 @@ The primary adversary is an honest-but-fallible coding agent. StateSeal is desig
 - completion reported without fresh checks of the selected checkpoint;
 - an exported receipt edited after issuance;
 - concurrent local brokers racing on the same task ledger.
+- verifier or agent subprocesses surviving a timeout or normal parent exit.
 
-The broker recomputes state identity, executes checks outside the agent process, records a hash-chained append-only ledger, and stores authority outside the repository.
+The broker recomputes state identity, executes checks outside the agent process, terminates dedicated agent and verifier process groups, records a hash-chained append-only ledger, and stores authority outside the repository.
 
 For Node projects, StateSeal may link an existing, Git-ignored `node_modules` directory into managed worktrees. The link target is broker-created, excluded from candidate identity, and its installed lock metadata contributes to the environment digest. This is dependency reuse, not dependency isolation or supply-chain attestation.
 
