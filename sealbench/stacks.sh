@@ -39,6 +39,7 @@ printf 'PASS STACK-GO managed go test\n'
 python_repo="$ROOT/python"
 shim_dir="$ROOT/python-tools"
 mkdir -p "$python_repo/tests" "$shim_dir"
+printf '__pycache__/\n*.py[cod]\n' > "$python_repo/.gitignore"
 printf '[project]\nname = "stateseal-stack"\nversion = "0.0.0"\n' > "$python_repo/pyproject.toml"
 printf 'def add(a, b):\n    return a + b\n' > "$python_repo/example.py"
 printf 'import unittest\nfrom example import add\n\nclass AddTest(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n' > "$python_repo/tests/test_example.py"
