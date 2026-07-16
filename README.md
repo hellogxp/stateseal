@@ -133,6 +133,7 @@ Authoritative state and the hash-chained event ledger live outside the repositor
 make test
 make build
 make sealbench
+make stackbench
 ```
 
 For networks that block the Git transport but allow the GitHub API, maintainers can publish a committed tree without storing credentials:

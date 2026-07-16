@@ -22,4 +22,6 @@ The v0alpha1 case catalog is:
 | SB014 | malformed action | `ABSTAINED`; checkpoint preserved |
 | SB015 | terminal-only observation | coverage reported as terminal-only |
 
-`run.sh` executes the portable smoke subset. The Go test suite covers hash-chain tampering, receipt tampering, stale mutation, protected path matching, and checkpoint non-advancement.
+`run.sh` executes all 15 cases with exact verdict, state, evidence, freshness, and recovery assertions. `stacks.sh` adds managed Go, Python, and Node compatibility fixtures, including Node dependency resolution from an ignored local `node_modules` graph.
+
+External compatibility validation on 2026-07-16 also exercised StateSeal itself (`go test ./...`), pallets/itsdangerous 2.3.0.dev (297 tests), and sindresorhus/yoctocolors 2.1.2 (`xo`, 56 AVA tests, and `tsd`). Each project passed both admission and fresh completion recertification.

@@ -1,4 +1,4 @@
-.PHONY: build test lint sealbench
+.PHONY: build test lint sealbench stackbench
 
 build:
 	go build -trimpath -ldflags "-s -w" -o bin/seal ./cmd/seal
@@ -11,3 +11,6 @@ lint:
 
 sealbench: build
 	./sealbench/run.sh ./bin/seal
+
+stackbench: build
+	./sealbench/stacks.sh ./bin/seal
