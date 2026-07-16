@@ -68,7 +68,7 @@ func Default(taskID string, checks []Check) Policy {
 	p.Task.ID = taskID
 	p.Task.Goal = "Define the intended outcome."
 	p.State.Include = []string{"**"}
-	p.State.Protected = []string{"seal.yaml", ".git/**", ".stateseal/**", ".github/workflows/**"}
+	p.State.Protected = []string{"seal.yaml", ".git/**", ".stateseal/**", ".codex/**", ".github/workflows/**"}
 	p.Admission.Checks = checks
 	p.Admission.TimeoutSeconds = 900
 	p.Completion.Checks = checks

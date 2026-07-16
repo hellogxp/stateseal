@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,52 @@ import (
 	"github.com/hellogxp/stateseal/internal/identity"
 	"github.com/hellogxp/stateseal/pkg/protocol"
 )
+
+func TestInstallCodexHooksPreservesExistingHooks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".codex", "hooks.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"policy-check"}]}]}}`
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := installCodexHooks(path, "/usr/local/bin/seal", false); err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	raw, _ := os.ReadFile(path)
+	if err := json.Unmarshal(raw, &root); err != nil {
+		t.Fatal(err)
+	}
+	hooks := root["hooks"].(map[string]any)
+	if hooks["PreToolUse"] == nil || hooks["PostToolUse"] == nil || hooks["Stop"] == nil {
+		t.Fatalf("hook merge lost data: %s", raw)
+	}
+	if err := installCodexHooks(path, "/usr/local/bin/seal", false); err == nil {
+		t.Fatal("duplicate StateSeal hook was accepted")
+	}
+	if err := installCodexHooks(path, "/opt/stateseal/seal", true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCodexVerifierCommandMatching(t *testing.T) {
+	configured := `["go test ./...","npm test"]`
+	if !matchesVerifierCommand("  go   test ./... ", configured) {
+		t.Fatal("configured verifier was not matched")
+	}
+	if matchesVerifierCommand("go test ./... && rm -rf build", configured) {
+		t.Fatal("compound command was incorrectly matched")
+	}
+}
+
+func TestShellJoinQuotesArguments(t *testing.T) {
+	got := shellJoin([]string{"sh", "-c", "printf 'ok' > file"})
+	if got != `sh -c 'printf '"'"'ok'"'"' > file'` {
+		t.Fatalf("unexpected shell command: %s", got)
+	}
+}
 
 func TestDetectChecksUsesPortableNPMTest(t *testing.T) {
 	root := t.TempDir()

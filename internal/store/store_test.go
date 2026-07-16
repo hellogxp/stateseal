@@ -31,6 +31,26 @@ func TestLedgerRejectsTampering(t *testing.T) {
 	}
 }
 
+func TestReadEventsValidatesAndReturnsTimeline(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	s, err := Open("/repo", "timeline")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"TASK_CREATED", "CANDIDATE_SUBMITTED", "COMPLETION_ADMITTED"} {
+		if _, err := s.Append(protocol.Event{Type: kind, TaskID: "timeline"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	events, err := s.ReadEvents()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 3 || events[2].Sequence != 3 || events[2].PrevHash != events[1].Hash {
+		t.Fatalf("unexpected timeline: %+v", events)
+	}
+}
+
 func TestLockIsExclusive(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	s, _ := Open("/repo", "task")

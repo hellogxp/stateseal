@@ -17,11 +17,12 @@ import (
 )
 
 type Broker struct {
-	Policy     config.Policy
-	PolicyHash string
-	Root       string
-	Store      *store.Store
-	State      protocol.TaskState
+	Policy         config.Policy
+	PolicyHash     string
+	Root           string
+	Store          *store.Store
+	State          protocol.TaskState
+	terminalReason string
 }
 
 // RecordAbstention records a protocol-level failure without changing the
@@ -31,6 +32,9 @@ func (b *Broker) RecordAbstention(reason string) (protocol.CompletionReceipt, er
 }
 
 func New(root, mode string) (*Broker, error) {
+	if mode != "shadow" && mode != "warn" && mode != "enforce" {
+		return nil, fmt.Errorf("invalid mode %q", mode)
+	}
 	if err := identity.EnsureLocalExclude(root, ".stateseal/"); err != nil {
 		return nil, err
 	}
@@ -104,6 +108,8 @@ func (b *Broker) AdmitManaged(m *worktree.Manager, proposal, source string) (pro
 // AdmitManagedWithReason evaluates a terminal candidate and records why an
 // older checkpoint was selected when terminal admission fails.
 func (b *Broker) AdmitManagedWithReason(m *worktree.Manager, proposal, source, recoveryReason string) (protocol.CompletionReceipt, error) {
+	b.terminalReason = recoveryReason
+	defer func() { b.terminalReason = "" }()
 	return b.admitManaged(m, proposal, source, true, recoveryReason)
 }
 
@@ -283,8 +289,11 @@ func (b *Broker) finish(verdict protocol.Verdict, cp *protocol.VerifiedCheckpoin
 }
 
 func (b *Broker) finishSelected(verdict protocol.Verdict, cp *protocol.VerifiedCheckpoint, evidence []protocol.EvidenceEnvelope, reason, terminalCandidate, selectionReason string, recovered bool) (protocol.CompletionReceipt, error) {
+	ruleID := classifyRule(verdict, reason, selectionReason, b.terminalReason, recovered, evidence)
+	disposition := modeDisposition(b.State.Mode, verdict)
 	receipt := protocol.CompletionReceipt{ReceiptVersion: protocol.Version, ReceiptID: identity.ID("rcpt"),
-		TaskID: b.State.TaskID, Verdict: verdict, PolicyDigest: b.PolicyHash, IssuedBy: "local-broker",
+		TaskID: b.State.TaskID, Verdict: verdict, RuleID: ruleID, EnforcementMode: b.State.Mode, Disposition: disposition,
+		PolicyDigest: b.PolicyHash, IssuedBy: "local-broker",
 		IssuedAt: time.Now().UTC(), ResidualRisks: b.Policy.ResidualRisks, Reason: reason,
 		TerminalCandidate: terminalCandidate, SelectionReason: selectionReason, Recovered: recovered}
 	if len(receipt.ResidualRisks) == 0 {
@@ -298,13 +307,19 @@ func (b *Broker) finishSelected(verdict protocol.Verdict, cp *protocol.VerifiedC
 	receipt.ReceiptDigest, _ = identity.JSONDigest(receipt)
 	b.State.Receipt = &receipt
 	b.State.Status = string(verdict)
+	b.State.RuleID = ruleID
+	b.State.Disposition = disposition
 	b.State.LastError = reason
 	if err := b.Store.Save(b.State); err != nil {
 		return receipt, err
 	}
 	kind := "COMPLETION_" + string(verdict)
 	if _, err := b.Store.Append(protocol.Event{Type: kind, TaskID: b.State.TaskID,
-		Data: map[string]any{"receipt_id": receipt.ReceiptID, "receipt_digest": receipt.ReceiptDigest, "reason": reason}}); err != nil {
+		Data: map[string]any{"receipt_id": receipt.ReceiptID, "receipt_digest": receipt.ReceiptDigest, "reason": reason, "rule_id": ruleID}}); err != nil {
+		return receipt, err
+	}
+	if _, err := b.Store.Append(protocol.Event{Type: "MODE_DECISION", TaskID: b.State.TaskID,
+		Data: map[string]any{"mode": b.State.Mode, "verdict": verdict, "disposition": disposition, "rule_id": ruleID}}); err != nil {
 		return receipt, err
 	}
 	path, err := b.Store.ExportReceipt(receipt)
@@ -313,6 +328,67 @@ func (b *Broker) finishSelected(verdict protocol.Verdict, cp *protocol.VerifiedC
 	}
 	_ = path
 	return receipt, err
+}
+
+func modeDisposition(mode string, verdict protocol.Verdict) string {
+	if verdict == protocol.VerdictAdmitted {
+		return "ALLOWED"
+	}
+	switch mode {
+	case "shadow":
+		return "OBSERVED"
+	case "warn":
+		return "OVERRIDDEN"
+	default:
+		return "BLOCKED"
+	}
+}
+
+func classifyRule(verdict protocol.Verdict, reason, selectionReason, terminalReason string, recovered bool, evidence []protocol.EvidenceEnvelope) string {
+	if recovered {
+		switch selectionReason {
+		case "wall_budget_exhausted":
+			return protocol.RuleWallBudgetExhausted
+		case "agent_exit_error":
+			return protocol.RuleAgentExited
+		default:
+			return protocol.RuleTerminalRecovered
+		}
+	}
+	switch terminalReason {
+	case "wall_budget_exhausted":
+		return protocol.RuleWallBudgetExhausted
+	case "agent_exit_error":
+		return protocol.RuleAgentExited
+	}
+	for _, item := range evidence {
+		if item.TimedOut {
+			return protocol.RuleVerifierTimedOut
+		}
+	}
+	lower := strings.ToLower(reason)
+	switch {
+	case strings.Contains(lower, "protected path"):
+		return protocol.RuleProtectedPathChanged
+	case strings.Contains(lower, "symlink escapes"):
+		return protocol.RuleFilesystemEscape
+	case strings.Contains(lower, "trusted base changed"):
+		return protocol.RuleTrustedBaseChanged
+	case strings.Contains(lower, "changed during"):
+		return protocol.RuleCandidateMutated
+	case strings.Contains(lower, "tree could not be reproduced") || strings.Contains(lower, "tree does not match"):
+		return protocol.RuleCheckpointMismatch
+	case strings.Contains(lower, "recertification failed"):
+		return protocol.RuleRecertificationFailed
+	case strings.Contains(lower, "candidate budget exhausted"):
+		return protocol.RuleCandidateBudgetExhausted
+	case strings.Contains(lower, "check failed") || strings.Contains(lower, "checks failed"):
+		return protocol.RuleVerifierFailed
+	case verdict == protocol.VerdictAbstained && reason != "":
+		return protocol.RuleVerifierUnavailable
+	default:
+		return ""
+	}
 }
 
 func cloneCheckpoint(cp *protocol.VerifiedCheckpoint) *protocol.VerifiedCheckpoint {
@@ -358,7 +434,7 @@ func InspectReceipt(path string) (protocol.CompletionReceipt, error) {
 	got, _ := identity.JSONDigest(r)
 	r.ReceiptDigest = want
 	if want == "" || got != want {
-		return r, fmt.Errorf("receipt integrity check failed")
+		return r, fmt.Errorf("%s: receipt integrity check failed", protocol.RuleReceiptIntegrity)
 	}
 	return r, nil
 }

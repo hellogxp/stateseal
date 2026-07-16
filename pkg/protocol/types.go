@@ -60,6 +60,9 @@ type CompletionReceipt struct {
 	ReceiptID          string    `json:"receipt_id"`
 	TaskID             string    `json:"task_id"`
 	Verdict            Verdict   `json:"verdict"`
+	RuleID             string    `json:"rule_id,omitempty"`
+	EnforcementMode    string    `json:"enforcement_mode"`
+	Disposition        string    `json:"disposition"`
 	CheckpointID       string    `json:"checkpoint_id,omitempty"`
 	TreeSHA256         string    `json:"tree_sha256,omitempty"`
 	CompletionEvidence []string  `json:"completion_evidence,omitempty"`
@@ -92,6 +95,8 @@ type TaskState struct {
 	ProposalPath string              `json:"proposal_path,omitempty"`
 	Mode         string              `json:"mode"`
 	Status       string              `json:"status"`
+	RuleID       string              `json:"rule_id,omitempty"`
+	Disposition  string              `json:"disposition,omitempty"`
 	Coverage     string              `json:"checkpoint_coverage"`
 	Candidate    *CandidateState     `json:"candidate,omitempty"`
 	Checkpoint   *VerifiedCheckpoint `json:"checkpoint,omitempty"`

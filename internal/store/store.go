@@ -96,33 +96,53 @@ func (s *Store) Append(event protocol.Event) (protocol.Event, error) {
 }
 
 func ledgerTail(path string) (uint64, string, error) {
-	f, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return 0, "", nil
-	}
+	events, err := readEvents(path)
 	if err != nil {
 		return 0, "", err
 	}
+	if len(events) == 0 {
+		return 0, "", nil
+	}
+	last := events[len(events)-1]
+	return last.Sequence, last.Hash, nil
+}
+
+// ReadEvents returns the complete ledger after validating sequence and hash
+// continuity. Consumers never receive a partially trusted timeline.
+func (s *Store) ReadEvents() ([]protocol.Event, error) {
+	return readEvents(filepath.Join(s.Dir, "ledger.jsonl"))
+}
+
+func readEvents(path string) ([]protocol.Event, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	defer f.Close()
 	var last protocol.Event
+	var events []protocol.Event
 	s := bufio.NewScanner(f)
 	for s.Scan() {
 		var e protocol.Event
 		if err := json.Unmarshal(s.Bytes(), &e); err != nil {
-			return 0, "", fmt.Errorf("malformed ledger: %w", err)
+			return nil, fmt.Errorf("malformed ledger: %w", err)
 		}
 		copyE := e
 		copyE.Hash = ""
 		h, _ := identity.JSONDigest(copyE)
-		if h != e.Hash || (last.Hash != "" && e.PrevHash != last.Hash) {
-			return 0, "", fmt.Errorf("ledger integrity check failed at sequence %d", e.Sequence)
+		if h != e.Hash || e.Sequence != uint64(len(events)+1) || (last.Hash == "" && e.PrevHash != "") || (last.Hash != "" && e.PrevHash != last.Hash) {
+			return nil, fmt.Errorf("ledger integrity check failed at sequence %d", e.Sequence)
 		}
 		last = e
+		events = append(events, e)
 	}
 	if err := s.Err(); err != nil {
-		return 0, "", err
+		return nil, err
 	}
-	return last.Sequence, last.Hash, nil
+	return events, nil
 }
 
 func (s *Store) ExportReceipt(receipt protocol.CompletionReceipt) (string, error) {

@@ -26,7 +26,9 @@ The v0alpha1 case catalog is:
 | SB018 | Agent secret in environment | verifier does not inherit it |
 | SB019 | verifier starts a background child | process group is terminated |
 | SB020 | Agent wall budget exhaustion | child processes stop and checkpoint is admitted |
+| SB021 | Codex lifecycle hook boundary | successful hook boundary survives terminal regression |
+| SB022 | Adoption-mode disposition | shadow observes and warn records an override |
 
-`run.sh` executes all 20 cases with exact verdict, state, evidence, freshness, process-lifecycle, and recovery assertions. `stacks.sh` adds managed Go, Python, and Node compatibility fixtures, including Node dependency resolution from an ignored local `node_modules` graph.
+`run.sh` executes all 22 cases with exact verdict, state, evidence, freshness, process-lifecycle, adapter, mode, and recovery assertions. `stacks.sh` adds managed Go, Python, and Node compatibility fixtures, including Node dependency resolution from an ignored local `node_modules` graph.
 
 External compatibility validation on 2026-07-16 also exercised StateSeal itself (`go test ./...`), pallets/itsdangerous 2.3.0.dev (297 tests), and sindresorhus/yoctocolors 2.1.2 (`xo`, 56 AVA tests, and `tsd`). Each project passed both admission and fresh completion recertification.

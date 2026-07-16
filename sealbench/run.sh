@@ -57,7 +57,7 @@ write_policy() {
     '  goal: Exercise a deterministic admission control.' \
     'state:' \
     '  include: ["**"]' \
-    '  protected: ["seal.yaml", ".stateseal/**", ".github/workflows/**"]' \
+  '  protected: ["seal.yaml", ".stateseal/**", ".codex/**", ".github/workflows/**"]' \
     'admission:' \
     '  checks:' \
     '    - id: admission' \
@@ -198,7 +198,7 @@ pass SB009 failed-proposal-overwrite
 repo=$(new_repo sb010)
 write_policy "$repo" sb010 'grep -qx good app.txt' 'grep -qx good app.txt' 10 10 2
 commit_policy "$repo"
-(cd "$repo" && SEAL_BIN="$SEAL" "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; code=0; "$SEAL_BIN" submit >/dev/null 2>&1 || code=$?; test "$code" -eq 11; printf "bad\n" > app.txt' >/dev/null)
+(cd "$repo" && SEAL_BIN="$SEAL" "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; code=0; "$SEAL_BIN" submit >/dev/null 2>&1 || code=$?; test "$code" -eq 2; printf "bad\n" > app.txt' >/dev/null)
 (cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .receipt.recovered == true' >/dev/null)
 pass SB010 budget-exhaustion-recovery
 
@@ -302,5 +302,27 @@ if kill -0 "$agent_child_pid" 2>/dev/null; then
 fi
 pass SB020 wall-budget-recovery
 
-test "$PASSED" -eq 20
-printf 'SealBench passed %d/20 deterministic failure-injection cases.\n' "$PASSED"
+# SB021: a Codex PostToolUse hook creates a checkpoint without model cooperation.
+repo=$(new_repo sb021)
+write_policy "$repo" sb021 'grep -qx good app.txt' 'grep -qx good app.txt'
+commit_policy "$repo"
+(cd "$repo" && SEAL_BIN="$SEAL" "$SEAL" run --source codex-adapter -- sh -c 'printf "good\n" > app.txt; command=$(printf "%s" "$STATESEAL_ADAPTER_CHECKS" | jq -r ".[0]"); jq -n --arg command "$command" '\''{hook_event_name:"PostToolUse",tool_input:{command:$command}}'\'' | "$SEAL_BIN" adapter codex hook; printf "bad\n" > app.txt' >/dev/null)
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .receipt.recovered == true and .checkpoint_coverage == "intermediate + terminal" and .receipt.rule_id == "CP001"' >/dev/null)
+pass SB021 codex-hook-boundary
+
+# SB022: adoption modes retain the verdict while recording distinct dispositions.
+repo=$(new_repo sb022-shadow)
+write_policy "$repo" sb022-shadow false false
+commit_policy "$repo"
+(cd "$repo" && "$SEAL" run --mode shadow -- sh -c 'printf candidate > app.txt' >/dev/null 2>&1)
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "REJECTED" and .disposition == "OBSERVED" and .receipt.enforcement_mode == "shadow"' >/dev/null)
+repo=$(new_repo sb022-warn)
+write_policy "$repo" sb022-warn false false
+commit_policy "$repo"
+(cd "$repo" && "$SEAL" run --mode warn -- sh -c 'printf candidate > app.txt' >/dev/null 2>&1)
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "REJECTED" and .disposition == "OVERRIDDEN" and .receipt.enforcement_mode == "warn"' >/dev/null)
+(cd "$repo" && "$SEAL" timeline --json | jq -e '.[-1].type == "MODE_DECISION" and .[-1].data.disposition == "OVERRIDDEN"' >/dev/null)
+pass SB022 mode-disposition
+
+test "$PASSED" -eq 22
+printf 'SealBench passed %d/22 deterministic failure-injection cases.\n' "$PASSED"

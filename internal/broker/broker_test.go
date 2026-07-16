@@ -46,6 +46,29 @@ func TestFailedCheckDoesNotProduceCheckpoint(t *testing.T) {
 	if r.Verdict != protocol.VerdictRejected || b.State.Checkpoint != nil {
 		t.Fatalf("rejected state advanced checkpoint")
 	}
+	if r.RuleID != protocol.RuleVerifierFailed || r.Disposition != "BLOCKED" {
+		t.Fatalf("rejection was not classified: %+v", r)
+	}
+}
+
+func TestWarnModeRecordsOverride(t *testing.T) {
+	root := testRepo(t)
+	p := config.Default("warn", []config.Check{{ID: "baseline", Command: []string{"git", "diff", "--check"}}})
+	if err := config.Write(filepath.Join(root, "seal.yaml"), p); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := New(root, "warn")
+	r, err := b.VerifyCurrent([]config.Check{{ID: "fail", Command: []string{"sh", "-c", "exit 1"}, TimeoutSeconds: 10}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Disposition != "OVERRIDDEN" || r.EnforcementMode != "warn" || b.State.Disposition != "OVERRIDDEN" {
+		t.Fatalf("warn override was not recorded: %+v", r)
+	}
+	events, err := b.Store.ReadEvents()
+	if err != nil || len(events) == 0 || events[len(events)-1].Type != "MODE_DECISION" {
+		t.Fatalf("missing mode decision: events=%+v err=%v", events, err)
+	}
 }
 
 func TestReceiptTamperIsDetected(t *testing.T) {
@@ -148,6 +171,9 @@ func TestTerminalRegressionRecertifiesPreviousCheckpoint(t *testing.T) {
 	}
 	if recovered.SelectionReason != "terminal_candidate_regressed" || len(recovered.CompletionEvidence) != 1 {
 		t.Fatalf("recovery provenance is incomplete: %+v", recovered)
+	}
+	if recovered.RuleID != protocol.RuleTerminalRecovered {
+		t.Fatalf("recovery rule is missing: %+v", recovered)
 	}
 }
 

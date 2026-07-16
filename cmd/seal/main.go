@@ -51,7 +51,7 @@ func (e staleStateError) Error() string { return e.reason }
 func newRoot() *cobra.Command {
 	cmd := &cobra.Command{Use: "seal", Short: "Transactional admission for coding-agent changes", SilenceUsage: true, SilenceErrors: true}
 	cmd.Version = version
-	cmd.AddCommand(initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), doctorCmd())
+	cmd.AddCommand(initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd())
 	return cmd
 }
 
@@ -103,7 +103,7 @@ func verifyCmd() *cobra.Command {
 			return codedError{11, err}
 		}
 		printReceipt(cmd, r)
-		return verdictError(r.Verdict, mode)
+		return handleVerdict(cmd, r, mode)
 	}}
 	cmd.Flags().StringVar(&mode, "mode", "enforce", "shadow, warn, or enforce")
 	return cmd
@@ -165,7 +165,8 @@ func runCmd() *cobra.Command {
 		agent := exec.CommandContext(ctx, args[0], args[1:]...)
 		processctl.ConfigureGroup(agent)
 		agent.Dir, agent.Stdin, agent.Stdout, agent.Stderr = proposal, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
-		agent.Env = append(os.Environ(), "STATESEAL_TASK_ID="+b.State.TaskID, "STATESEAL_PROPOSAL_ROOT="+proposal, "STATESEAL_ORIGINAL_ROOT="+root, "STATESEAL_SUBMIT_DIR="+requestDir)
+		adapterChecks, _ := json.Marshal(checkCommandStrings(b.Policy))
+		agent.Env = append(os.Environ(), "STATESEAL_TASK_ID="+b.State.TaskID, "STATESEAL_PROPOSAL_ROOT="+proposal, "STATESEAL_ORIGINAL_ROOT="+root, "STATESEAL_SUBMIT_DIR="+requestDir, "STATESEAL_MODE="+mode, "STATESEAL_ADAPTER_CHECKS="+string(adapterChecks))
 		agentErr := agent.Run()
 		_ = processctl.KillGroup(agent)
 		close(stopBroker)
@@ -193,7 +194,7 @@ func runCmd() *cobra.Command {
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "Verified checkpoint applied to the current branch.")
 		}
-		return verdictError(r.Verdict, mode)
+		return handleVerdict(cmd, r, mode)
 	}}
 	cmd.Flags().StringVar(&mode, "mode", "enforce", "shadow, warn, or enforce")
 	cmd.Flags().StringVar(&source, "source", "auto", "candidate source identity")
@@ -208,41 +209,52 @@ type submissionRequest struct {
 
 func submitCmd() *cobra.Command {
 	return &cobra.Command{Use: "submit", Short: "Submit an intermediate candidate to the active broker", RunE: func(cmd *cobra.Command, _ []string) error {
-		dir := os.Getenv("STATESEAL_SUBMIT_DIR")
-		if dir == "" {
-			return codedError{10, fmt.Errorf("seal submit must run inside an active seal run")}
+		receipt, err := requestSubmission()
+		if err != nil {
+			return err
 		}
-		request := submissionRequest{ID: identity.ID("submit"), CreatedAt: time.Now().UTC()}
-		raw, _ := json.Marshal(request)
-		requestPath := filepath.Join(dir, request.ID+".request.json")
-		if err := os.WriteFile(requestPath, raw, 0o600); err != nil {
-			return codedError{11, err}
+		printReceipt(cmd, receipt)
+		mode := os.Getenv("STATESEAL_MODE")
+		if mode == "" {
+			mode = "enforce"
 		}
-		responsePath := filepath.Join(dir, request.ID+".response.json")
-		deadline := time.Now().Add(30 * time.Minute)
-		for time.Now().Before(deadline) {
-			raw, err := os.ReadFile(responsePath)
-			if err == nil {
-				var response struct {
-					Receipt protocol.CompletionReceipt `json:"receipt"`
-					Error   string                     `json:"error,omitempty"`
-				}
-				if err := json.Unmarshal(raw, &response); err != nil {
-					return codedError{11, err}
-				}
-				if response.Error != "" {
-					return codedError{11, errors.New(response.Error)}
-				}
-				printReceipt(cmd, response.Receipt)
-				return verdictError(response.Receipt.Verdict, "enforce")
-			}
-			if !os.IsNotExist(err) {
-				return codedError{11, err}
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		return codedError{11, fmt.Errorf("broker did not answer the submission")}
+		return handleVerdict(cmd, receipt, mode)
 	}}
+}
+
+func requestSubmission() (protocol.CompletionReceipt, error) {
+	dir := os.Getenv("STATESEAL_SUBMIT_DIR")
+	if dir == "" {
+		return protocol.CompletionReceipt{}, codedError{10, fmt.Errorf("seal submit must run inside an active seal run")}
+	}
+	request := submissionRequest{ID: identity.ID("submit"), CreatedAt: time.Now().UTC()}
+	raw, _ := json.Marshal(request)
+	if err := os.WriteFile(filepath.Join(dir, request.ID+".request.json"), raw, 0o600); err != nil {
+		return protocol.CompletionReceipt{}, codedError{11, err}
+	}
+	responsePath := filepath.Join(dir, request.ID+".response.json")
+	deadline := time.Now().Add(30 * time.Minute)
+	for time.Now().Before(deadline) {
+		raw, err := os.ReadFile(responsePath)
+		if err == nil {
+			var response struct {
+				Receipt protocol.CompletionReceipt `json:"receipt"`
+				Error   string                     `json:"error,omitempty"`
+			}
+			if err := json.Unmarshal(raw, &response); err != nil {
+				return protocol.CompletionReceipt{}, codedError{11, err}
+			}
+			if response.Error != "" {
+				return protocol.CompletionReceipt{}, codedError{11, errors.New(response.Error)}
+			}
+			return response.Receipt, nil
+		}
+		if !os.IsNotExist(err) {
+			return protocol.CompletionReceipt{}, codedError{11, err}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return protocol.CompletionReceipt{}, codedError{11, fmt.Errorf("broker did not answer the submission")}
 }
 
 func serveSubmissions(stop <-chan struct{}, done chan<- struct{}, dir string, b *broker.Broker, m *worktree.Manager, proposal, source string, stderr interface{ Write([]byte) (int, error) }) {
@@ -276,9 +288,9 @@ func serveSubmissions(stop <-chan struct{}, done chan<- struct{}, dir string, b 
 				}
 				maxIntermediate := b.Policy.Budget.MaxCandidates - 1
 				if b.Policy.Budget.MaxCandidates > 0 && processed >= maxIntermediate {
-					err = fmt.Errorf("candidate budget exhausted; terminal candidate slot is reserved")
+					receipt, err = b.RecordAbstention("candidate budget exhausted; terminal candidate slot is reserved")
 				}
-				if err == nil {
+				if err == nil && receipt.ReceiptID == "" {
 					processed++
 					b.State.Coverage = "intermediate + terminal"
 					receipt, err = b.AdmitIntermediate(m, proposal, source+"-intermediate")
@@ -330,6 +342,38 @@ func statusCmd() *cobra.Command {
 	return cmd
 }
 
+func timelineCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{Use: "timeline", Short: "Show the integrity-verified reliability timeline", RunE: func(cmd *cobra.Command, _ []string) error {
+		_, s, err := loadState()
+		if err != nil {
+			return codedError{10, err}
+		}
+		events, err := s.ReadEvents()
+		if err != nil {
+			return codedError{1, err}
+		}
+		if jsonOut {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(events)
+		}
+		for _, event := range events {
+			rule, _ := event.Data["rule_id"].(string)
+			reason, _ := event.Data["reason"].(string)
+			fmt.Fprintf(cmd.OutOrStdout(), "%03d  %s  %-25s", event.Sequence, event.Timestamp.Format(time.RFC3339), event.Type)
+			if rule != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s", rule)
+			}
+			if reason != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s", reason)
+			}
+			fmt.Fprintln(cmd.OutOrStdout())
+		}
+		return nil
+	}}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit machine-readable ledger events")
+	return cmd
+}
+
 func diffCmd() *cobra.Command {
 	return &cobra.Command{Use: "diff", Short: "Show the verified checkpoint diff from its trusted base", RunE: func(cmd *cobra.Command, _ []string) error {
 		state, _, err := loadState()
@@ -370,12 +414,24 @@ func applyCmd() *cobra.Command {
 }
 
 func explainCmd() *cobra.Command {
-	return &cobra.Command{Use: "explain", Short: "Explain the latest verdict and next action", RunE: func(cmd *cobra.Command, _ []string) error {
+	var jsonOut bool
+	cmd := &cobra.Command{Use: "explain", Short: "Explain the latest verdict and next action", RunE: func(cmd *cobra.Command, _ []string) error {
 		state, _, err := loadState()
 		if err != nil {
 			return codedError{10, err}
 		}
+		next := nextAction(state.Status)
+		if jsonOut {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
+				"verdict": state.Status, "rule_id": state.RuleID, "rule_summary": protocol.RuleSummary(state.RuleID),
+				"reason": state.LastError, "mode": state.Mode, "disposition": state.Disposition, "next_action": next,
+				"receipt": state.Receipt, "checkpoint": state.Checkpoint,
+			})
+		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Verdict: %s\n", state.Status)
+		if state.RuleID != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Rule:    %s — %s\n", state.RuleID, protocol.RuleSummary(state.RuleID))
+		}
 		if state.LastError != "" {
 			fmt.Fprintf(cmd.OutOrStdout(), "Reason:  %s\n", state.LastError)
 		}
@@ -384,16 +440,25 @@ func explainCmd() *cobra.Command {
 			if state.Receipt != nil && state.Receipt.Recovered {
 				fmt.Fprintf(cmd.OutOrStdout(), "Selected checkpoint %s after %s and freshly recertified it.\n", state.Receipt.CheckpointID, state.Receipt.SelectionReason)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "Next: inspect with `seal diff`, then use `seal apply`.")
-		case "REJECTED":
-			fmt.Fprintln(cmd.OutOrStdout(), "Next: fix the failing check in the proposal worktree and run again.")
-		case "STALE":
-			fmt.Fprintln(cmd.OutOrStdout(), "Next: rerun verification against the current state.")
-		default:
-			fmt.Fprintln(cmd.OutOrStdout(), "Next: inspect configuration, evidence output, and residual risks.")
 		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Next: %s\n", next)
 		return nil
 	}}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit a machine-readable explanation")
+	return cmd
+}
+
+func nextAction(status string) string {
+	switch status {
+	case "ADMITTED":
+		return "inspect with `seal diff`, then use `seal apply`"
+	case "REJECTED":
+		return "fix the failing check in the proposal worktree and run again"
+	case "STALE":
+		return "rerun verification against the current state"
+	default:
+		return "inspect configuration, evidence output, and residual risks"
+	}
 }
 
 func inspectCmd() *cobra.Command {
@@ -525,6 +590,13 @@ func loadState() (protocol.TaskState, *store.Store, error) {
 	state, err := s.Load()
 	if err == nil {
 		state.Freshness, state.StaleReason = stateFreshness(root, rawPolicyDigest(root), state)
+		if state.Freshness == "STALE" {
+			if strings.Contains(state.StaleReason, "policy") {
+				state.RuleID = protocol.RulePolicyChanged
+			} else if strings.Contains(state.StaleReason, "trusted base") {
+				state.RuleID = protocol.RuleTrustedBaseChanged
+			}
+		}
 	}
 	return state, s, err
 }
@@ -592,6 +664,10 @@ func printReceipt(cmd *cobra.Command, r protocol.CompletionReceipt) {
 	if r.Reason != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "Reason:  %s\n", r.Reason)
 	}
+	if r.RuleID != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Rule:    %s — %s\n", r.RuleID, protocol.RuleSummary(r.RuleID))
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Mode:    %s (%s)\n", r.EnforcementMode, r.Disposition)
 	if r.Recovered {
 		fmt.Fprintf(cmd.OutOrStdout(), "Recovered checkpoint: %s\nTerminal candidate:  %s\nSelection reason:    %s\n", r.CheckpointID, r.TerminalCandidate, r.SelectionReason)
 	}
@@ -613,6 +689,37 @@ func printReceipt(cmd *cobra.Command, r protocol.CompletionReceipt) {
 			fmt.Fprintln(f)
 		}
 	}
+}
+
+func handleVerdict(cmd *cobra.Command, r protocol.CompletionReceipt, mode string) error {
+	if r.Verdict != protocol.VerdictAdmitted {
+		switch mode {
+		case "shadow":
+			fmt.Fprintf(cmd.ErrOrStderr(), "Shadow: enforce mode would block %s; execution continues.\n", r.Verdict)
+		case "warn":
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %s was overridden by warn mode; the override is recorded in the ledger.\n", r.Verdict)
+		}
+	}
+	return verdictError(r.Verdict, mode)
+}
+
+func checkCommandStrings(p config.Policy) []string {
+	seen := map[string]bool{}
+	var commands []string
+	for _, check := range append(append([]config.Check(nil), p.Admission.Checks...), p.Completion.Checks...) {
+		bare := shellJoin(check.Command)
+		variants := []string{bare}
+		if check.CWD != "" && check.CWD != "." {
+			variants = append(variants, "cd "+shellQuote(check.CWD)+" && "+bare)
+		}
+		for _, command := range variants {
+			if command != "" && !seen[command] {
+				seen[command] = true
+				commands = append(commands, command)
+			}
+		}
+	}
+	return commands
 }
 
 func verdictError(v protocol.Verdict, mode string) error {

@@ -31,7 +31,9 @@ go install github.com/hellogxp/stateseal/cmd/seal@latest
 cd your-project
 seal init
 # Review seal.yaml before enforcing it.
-git add seal.yaml && git commit -m "Configure StateSeal policy"
+seal adapter codex install
+git add seal.yaml .codex/hooks.json && git commit -m "Configure StateSeal policy"
+# Review and trust the generated definitions with /hooks in Codex.
 
 seal verify -- go test ./...
 seal run -- codex exec "Fix the duplicate payment bug"
@@ -96,18 +98,23 @@ Admission checks decide whether a candidate is worth preserving. Completion chec
 | `seal run -- …` | Run an agent in a proposal worktree and broker admission |
 | `seal submit` | Request an intermediate candidate boundary during `seal run` |
 | `seal status` | Show the task, checkpoint, verdict, and coverage |
+| `seal timeline` | Show the integrity-verified event timeline (`--json` supported) |
 | `seal diff` | Compare the verified checkpoint with its trusted base |
 | `seal apply` | Apply an admitted checkpoint to the user branch |
-| `seal explain` | Explain the latest verdict and next action |
+| `seal explain` | Explain the latest rule and next action (`--json` supported) |
 | `seal restore` | Restore the managed proposal to the verified checkpoint |
 | `seal inspect` | Check a receipt's structural integrity |
+| `seal adapter codex install` | Install Codex lifecycle hooks for automatic boundaries |
 | `seal doctor` | Validate local prerequisites and policy |
 
 Modes support gradual adoption:
 
-- `shadow`: collect and report without blocking;
-- `warn`: report a blocking verdict but return success;
+- `shadow`: record the counterfactual enforce verdict without blocking;
+- `warn`: emit a warning, record an explicit override, and return success;
 - `enforce`: return a stable non-zero exit code unless admitted.
+
+Receipts keep the underlying verdict and add `enforcement_mode`, `disposition`,
+and a stable `rule_id`. See [the reliability rule taxonomy](docs/rules.md).
 
 ## Trust boundary
 
