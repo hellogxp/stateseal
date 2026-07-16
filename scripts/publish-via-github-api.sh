@@ -22,13 +22,13 @@ request() {
   local url=$2
   local data=${3:-}
   if [[ -n "$data" ]]; then
-    curl -fsS -X "$method" \
+    curl -fsS --http1.1 --retry 5 --retry-all-errors --connect-timeout 10 -X "$method" \
       -H "Authorization: Bearer $GH_TOKEN" \
       -H 'Accept: application/vnd.github+json' \
       -H 'X-GitHub-Api-Version: 2022-11-28' \
       "$url" -d "@$data"
   else
-    curl -fsS -X "$method" \
+    curl -fsS --http1.1 --retry 5 --retry-all-errors --connect-timeout 10 -X "$method" \
       -H "Authorization: Bearer $GH_TOKEN" \
       -H 'Accept: application/vnd.github+json' \
       -H 'X-GitHub-Api-Version: 2022-11-28' \
