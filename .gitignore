@@ -1,0 +1,4 @@
+/bin/
+/.stateseal/
+*.out
+.DS_Store

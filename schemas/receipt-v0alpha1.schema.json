@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateseal.dev/schemas/receipt-v0alpha1.schema.json",
+  "title": "StateSeal Completion Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt_version", "receipt_id", "task_id", "verdict", "policy_digest", "issued_by", "issued_at", "residual_risks", "receipt_digest"],
+  "properties": {
+    "receipt_version": {"const": "v0alpha1"},
+    "receipt_id": {"type": "string", "pattern": "^rcpt_"},
+    "task_id": {"type": "string", "minLength": 1},
+    "verdict": {"enum": ["ADMITTED", "REJECTED", "ABSTAINED", "STALE", "ESCALATED"]},
+    "checkpoint_id": {"type": "string"},
+    "tree_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "completion_evidence": {"type": "array", "items": {"type": "string"}},
+    "policy_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "issued_by": {"type": "string"},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "residual_risks": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "reason": {"type": "string"},
+    "receipt_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

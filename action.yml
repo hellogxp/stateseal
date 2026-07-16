@@ -1,0 +1,24 @@
+name: StateSeal
+description: Freshly verify the checked-out commit under a StateSeal policy.
+inputs:
+  command:
+    description: Verification command executed by an explicit shell adapter.
+    required: true
+  mode:
+    description: StateSeal mode (shadow, warn, or enforce).
+    required: false
+    default: enforce
+runs:
+  using: composite
+  steps:
+    - name: Build StateSeal
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: go build -trimpath -o "$RUNNER_TEMP/seal" ./cmd/seal
+    - name: Verify checked-out state
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        STATESEAL_CHECK: ${{ inputs.command }}
+        STATESEAL_MODE: ${{ inputs.mode }}
+      run: '"$RUNNER_TEMP/seal" verify --mode "$STATESEAL_MODE" -- bash -euo pipefail -c "$STATESEAL_CHECK"'

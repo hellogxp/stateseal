@@ -1,0 +1,150 @@
+package store
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"time"
+
+	"github.com/hellogxp/stateseal/internal/identity"
+	"github.com/hellogxp/stateseal/pkg/protocol"
+)
+
+type Store struct{ Dir string }
+
+func Open(repoRoot, taskID string) (*Store, error) {
+	repoID := identity.Digest([]byte(repoRoot))[:20]
+	base, err := stateHome()
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Join(base, "stateseal", repoID, taskID)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	return &Store{Dir: dir}, nil
+}
+
+func stateHome() (string, error) {
+	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
+		return x, nil
+	}
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(h, "Library", "Application Support"), nil
+	}
+	return filepath.Join(h, ".local", "state"), nil
+}
+
+func (s *Store) Save(state protocol.TaskState) error {
+	state.UpdatedAt = time.Now().UTC()
+	b, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := filepath.Join(s.Dir, "state.json.tmp")
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filepath.Join(s.Dir, "state.json"))
+}
+
+func (s *Store) Load() (protocol.TaskState, error) {
+	b, err := os.ReadFile(filepath.Join(s.Dir, "state.json"))
+	if err != nil {
+		return protocol.TaskState{}, err
+	}
+	var state protocol.TaskState
+	if err := json.Unmarshal(b, &state); err != nil {
+		return state, err
+	}
+	return state, nil
+}
+
+func (s *Store) Append(event protocol.Event) (protocol.Event, error) {
+	path := filepath.Join(s.Dir, "ledger.jsonl")
+	seq, prev, err := ledgerTail(path)
+	if err != nil {
+		return event, err
+	}
+	event.Sequence, event.PrevHash, event.Timestamp = seq+1, prev, time.Now().UTC()
+	event.Hash = ""
+	h, err := identity.JSONDigest(event)
+	if err != nil {
+		return event, err
+	}
+	event.Hash = h
+	b, err := json.Marshal(event)
+	if err != nil {
+		return event, err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return event, err
+	}
+	defer f.Close()
+	if _, err = f.Write(append(b, '\n')); err != nil {
+		return event, err
+	}
+	return event, f.Sync()
+}
+
+func ledgerTail(path string) (uint64, string, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return 0, "", nil
+	}
+	if err != nil {
+		return 0, "", err
+	}
+	defer f.Close()
+	var last protocol.Event
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		var e protocol.Event
+		if err := json.Unmarshal(s.Bytes(), &e); err != nil {
+			return 0, "", fmt.Errorf("malformed ledger: %w", err)
+		}
+		copyE := e
+		copyE.Hash = ""
+		h, _ := identity.JSONDigest(copyE)
+		if h != e.Hash || (last.Hash != "" && e.PrevHash != last.Hash) {
+			return 0, "", fmt.Errorf("ledger integrity check failed at sequence %d", e.Sequence)
+		}
+		last = e
+	}
+	if err := s.Err(); err != nil {
+		return 0, "", err
+	}
+	return last.Sequence, last.Hash, nil
+}
+
+func (s *Store) ExportReceipt(receipt protocol.CompletionReceipt) (string, error) {
+	dir := filepath.Join(s.Dir, "receipts")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, receipt.ReceiptID+".json")
+	b, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return path, os.WriteFile(path, append(b, '\n'), 0o600)
+}
+
+func (s *Store) Lock() (func(), error) {
+	path := filepath.Join(s.Dir, "task.lock")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("task is already active: %w", err)
+	}
+	f.WriteString(fmt.Sprintf("pid=%d\n", os.Getpid()))
+	f.Close()
+	return func() { _ = os.Remove(path) }, nil
+}

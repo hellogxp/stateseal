@@ -1,0 +1,20 @@
+{
+  "version": "v0alpha1",
+  "cases": [
+    {"id":"SB001","name":"stale-evidence-replay","expected":"not-admitted"},
+    {"id":"SB002","name":"verify-then-edit","expected":"STALE"},
+    {"id":"SB003","name":"wrong-tree","expected":"not-admitted"},
+    {"id":"SB004","name":"wrong-command-cwd","expected":"identity-mismatch"},
+    {"id":"SB005","name":"suite-changed-after-pass","expected":"not-admitted"},
+    {"id":"SB006","name":"policy-changed-after-pass","expected":"not-admitted"},
+    {"id":"SB007","name":"receipt-tamper","expected":"integrity-failure"},
+    {"id":"SB008","name":"correct-then-regress","expected":"checkpoint-preserved"},
+    {"id":"SB009","name":"failed-proposal-overwrite","expected":"checkpoint-preserved"},
+    {"id":"SB010","name":"budget-exhaustion","expected":"recoverable-checkpoint"},
+    {"id":"SB011","name":"verifier-timeout","expected":"not-admitted"},
+    {"id":"SB012","name":"recertification-failure","expected":"not-admitted"},
+    {"id":"SB013","name":"protected-path-change","expected":"REJECTED"},
+    {"id":"SB014","name":"malformed-action","expected":"ABSTAINED"},
+    {"id":"SB015","name":"terminal-only-coverage","expected":"reported"}
+  ]
+}
