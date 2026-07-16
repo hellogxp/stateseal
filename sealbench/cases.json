@@ -22,6 +22,7 @@
     {"id":"SB019","name":"verifier-process-cleanup","expected":"no-surviving-child"},
     {"id":"SB020","name":"wall-budget-recovery","expected":"ADMITTED-recovered"},
     {"id":"SB021","name":"codex-hook-boundary","expected":"ADMITTED-recovered"},
-    {"id":"SB022","name":"mode-disposition","expected":"observed-and-overridden"}
+    {"id":"SB022","name":"mode-disposition","expected":"observed-and-overridden"},
+    {"id":"SB023","name":"cross-agent-lifecycle-matrix","expected":"ADMITTED-recovered"}
   ]
 }

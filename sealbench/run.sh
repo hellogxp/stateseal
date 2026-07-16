@@ -57,7 +57,7 @@ write_policy() {
     '  goal: Exercise a deterministic admission control.' \
     'state:' \
     '  include: ["**"]' \
-  '  protected: ["seal.yaml", ".stateseal/**", ".codex/**", ".github/workflows/**"]' \
+  '  protected: ["seal.yaml", ".stateseal/**", ".codex/**", ".claude/**", ".gemini/**", ".cursor/**", ".opencode/**", ".github/hooks/**", ".github/workflows/**"]' \
     'admission:' \
     '  checks:' \
     '    - id: admission' \
@@ -290,7 +290,7 @@ pass SB019 verifier-process-cleanup
 
 # SB020: wall-budget exhaustion recertifies the last checkpoint and kills agent children.
 repo=$(new_repo sb020)
-write_policy "$repo" sb020 'grep -qx good app.txt' 'grep -qx good app.txt' 10 10 8 . . 1
+write_policy "$repo" sb020 'grep -qx good app.txt' 'grep -qx good app.txt' 10 10 8 . . 3
 commit_policy "$repo"
 (cd "$repo" && SEAL_BIN="$SEAL" "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; sleep 30 & echo $! > agent-child.pid; printf "bad\n" > app.txt; wait' >/dev/null)
 (cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .receipt.recovered == true and .receipt.selection_reason == "wall_budget_exhausted"' >/dev/null)
@@ -324,5 +324,26 @@ commit_policy "$repo"
 (cd "$repo" && "$SEAL" timeline --json | jq -e '.[-1].type == "MODE_DECISION" and .[-1].data.disposition == "OVERRIDDEN"' >/dev/null)
 pass SB022 mode-disposition
 
-test "$PASSED" -eq 22
-printf 'SealBench passed %d/22 deterministic failure-injection cases.\n' "$PASSED"
+# SB023: every native adapter maps its lifecycle event to the same broker boundary.
+for spec in 'claude PostToolUse tool_input' 'gemini AfterTool tool_input' 'cursor afterShellExecution top' 'copilot postToolUse toolArgs' 'opencode PostToolUse tool_input'; do
+  read -r adapter event shape <<<"$spec"
+  repo=$(new_repo "sb023-$adapter")
+  write_policy "$repo" "sb023-$adapter" 'grep -qx good app.txt' 'grep -qx good app.txt'
+  commit_policy "$repo"
+  (cd "$repo" && ADAPTER="$adapter" EVENT="$event" SHAPE="$shape" SEAL_BIN="$SEAL" "$SEAL" run --source "$adapter-adapter" -- sh -c '
+    printf "good\n" > app.txt
+    command=$(printf "%s" "$STATESEAL_ADAPTER_CHECKS" | jq -r ".[0]")
+    case "$SHAPE" in
+      toolArgs) payload=$(jq -n --arg command "$command" '\''{toolArgs:{command:$command}}'\'') ;;
+      top) payload=$(jq -n --arg command "$command" '\''{command:$command}'\'') ;;
+      *) payload=$(jq -n --arg command "$command" '\''{tool_input:{command:$command}}'\'') ;;
+    esac
+    printf "%s" "$payload" | "$SEAL_BIN" adapter "$ADAPTER" hook "$EVENT" >/dev/null
+    printf "bad\n" > app.txt
+  ' >/dev/null)
+  (cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .receipt.recovered == true and .checkpoint_coverage == "intermediate + terminal"' >/dev/null)
+done
+pass SB023 cross-agent-lifecycle-matrix
+
+test "$PASSED" -eq 23
+printf 'SealBench passed %d/23 deterministic failure-injection cases.\n' "$PASSED"

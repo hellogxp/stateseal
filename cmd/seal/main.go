@@ -741,6 +741,15 @@ func adapterSource(exe string) string {
 	if strings.Contains(base, "opencode") {
 		return "opencode-adapter"
 	}
+	if strings.Contains(base, "gemini") {
+		return "gemini-adapter"
+	}
+	if strings.Contains(base, "cursor") {
+		return "cursor-adapter"
+	}
+	if strings.Contains(base, "copilot") {
+		return "copilot-adapter"
+	}
 	return "command-adapter"
 }
 func short(s string) string {

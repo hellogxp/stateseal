@@ -41,6 +41,68 @@ func TestInstallCodexHooksPreservesExistingHooks(t *testing.T) {
 	}
 }
 
+func TestInstallAgentAdapterMatrix(t *testing.T) {
+	root := t.TempDir()
+	for _, agent := range supportedAgents {
+		path, err := installAgentAdapter(root, agent, "/usr/local/bin/seal", false)
+		if err != nil {
+			t.Fatalf("install %s: %v", agent, err)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s adapter: %v", agent, err)
+		}
+		marker := "adapter " + agent + " hook"
+		if agent == "opencode" {
+			marker = `"opencode", "hook"`
+		}
+		if !strings.Contains(string(raw), marker) {
+			t.Fatalf("%s adapter does not invoke StateSeal: %s", agent, raw)
+		}
+		if _, err := installAgentAdapter(root, agent, "/usr/local/bin/seal", false); err == nil {
+			t.Fatalf("%s adapter accepted duplicate installation", agent)
+		}
+		if _, err := installAgentAdapter(root, agent, "/opt/stateseal/seal", true); err != nil {
+			t.Fatalf("replace %s adapter: %v", agent, err)
+		}
+	}
+}
+
+func TestLifecycleEventMatrix(t *testing.T) {
+	cases := []struct {
+		agent, tool, stop string
+	}{
+		{"codex", "PostToolUse", "Stop"},
+		{"claude", "PostToolUse", "Stop"},
+		{"gemini", "AfterTool", "AfterAgent"},
+		{"cursor", "afterShellExecution", "stop"},
+		{"copilot", "postToolUse", "agentStop"},
+		{"opencode", "PostToolUse", "Stop"},
+	}
+	for _, tc := range cases {
+		tool, stop := lifecycleEventKind(tc.agent, tc.tool)
+		if !tool || stop {
+			t.Fatalf("%s tool event was not recognized", tc.agent)
+		}
+		tool, stop = lifecycleEventKind(tc.agent, tc.stop)
+		if tool || !stop {
+			t.Fatalf("%s stop event was not recognized", tc.agent)
+		}
+	}
+}
+
+func TestHookCommandSupportsAgentPayloadShapes(t *testing.T) {
+	for _, event := range []map[string]any{
+		{"tool_input": map[string]any{"command": "go test ./..."}},
+		{"toolArgs": map[string]any{"command": "go test ./..."}},
+		{"command": "go test ./..."},
+	} {
+		if got := hookCommand(event); got != "go test ./..." {
+			t.Fatalf("command not extracted from %+v: %q", event, got)
+		}
+	}
+}
+
 func TestCodexVerifierCommandMatching(t *testing.T) {
 	configured := `["go test ./...","npm test"]`
 	if !matchesVerifierCommand("  go   test ./... ", configured) {

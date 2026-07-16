@@ -31,9 +31,10 @@ go install github.com/hellogxp/stateseal/cmd/seal@latest
 cd your-project
 seal init
 # Review seal.yaml before enforcing it.
-seal adapter codex install
-git add seal.yaml .codex/hooks.json && git commit -m "Configure StateSeal policy"
-# Review and trust the generated definitions with /hooks in Codex.
+seal adapter list
+# Install the adapter for the agent you use, for example:
+seal adapter claude install
+git add seal.yaml .claude/settings.json && git commit -m "Configure StateSeal policy"
 
 seal verify -- go test ./...
 seal run -- codex exec "Fix the duplicate payment bug"
@@ -56,7 +57,15 @@ task:
 
 state:
   include: ["src/**", "tests/**", "go.mod", "go.sum"]
-  protected: [".github/workflows/**", ".stateseal/**"]
+  protected:
+    - ".stateseal/**"
+    - ".codex/**"
+    - ".claude/**"
+    - ".gemini/**"
+    - ".cursor/**"
+    - ".opencode/**"
+    - ".github/hooks/**"
+    - ".github/workflows/**"
 
 admission:
   timeout_seconds: 300
@@ -104,7 +113,8 @@ Admission checks decide whether a candidate is worth preserving. Completion chec
 | `seal explain` | Explain the latest rule and next action (`--json` supported) |
 | `seal restore` | Restore the managed proposal to the verified checkpoint |
 | `seal inspect` | Check a receipt's structural integrity |
-| `seal adapter codex install` | Install Codex lifecycle hooks for automatic boundaries |
+| `seal adapter list` | List native lifecycle integrations |
+| `seal adapter <agent> install` | Install automatic boundaries for a supported agent |
 | `seal doctor` | Validate local prerequisites and policy |
 
 Modes support gradual adoption:
@@ -119,6 +129,11 @@ and a stable `rule_id`. See [the reliability rule taxonomy](docs/rules.md).
 ## Trust boundary
 
 StateSeal v0alpha1 is designed for honest-but-fallible coding agents. A Git worktree is isolation from accidental edits, not a security sandbox. A malicious process running as the same OS user may alter local state. Protected CI must perform a clean checkout and fresh verification; it must not trust a receipt committed in a pull request.
+
+The core protocol is agent-agnostic. Codex, Claude Code, Gemini CLI, Cursor
+Agent, GitHub Copilot CLI, and OpenCode integrations are thin lifecycle
+adapters; every other terminal agent still works through `seal run -- <agent>`
+with mandatory terminal recertification.
 
 An `ADMITTED` verdict means that the exact checkpoint satisfied the configured policy. It does not prove that the specification or test suite is complete, that every environment is safe, or that the host is uncompromised. Receipts therefore always include residual risks.
 
