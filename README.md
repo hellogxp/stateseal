@@ -135,6 +135,12 @@ make build
 make sealbench
 ```
 
+For networks that block the Git transport but allow the GitHub API, maintainers can publish a committed tree without storing credentials:
+
+```bash
+GH_TOKEN=... scripts/publish-via-github-api.sh owner/repository main
+```
+
 Every change to the core admission path should include a failure-injection test. See [docs/threat-model.md](docs/threat-model.md) and [sealbench/README.md](sealbench/README.md).
 
 ## Status
