@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -45,10 +46,10 @@ func runOne(root, candidateID, treeHash, policyHash string, check config.Check) 
 	exit := 0
 	if err != nil {
 		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exit = exitErr.ExitCode()
-		} else if ctx.Err() != nil {
+		if ctx.Err() != nil {
 			exit = 124
+		} else if errors.As(err, &exitErr) {
+			exit = exitErr.ExitCode()
 		} else {
 			exit = 127
 		}
@@ -61,6 +62,7 @@ func runOne(root, candidateID, treeHash, policyHash string, check config.Check) 
 	envHash, _ := identity.JSONDigest(map[string]string{
 		"goos": runtime.GOOS, "goarch": runtime.GOARCH,
 		"path": os.Getenv("PATH"), "shell": os.Getenv("SHELL"),
+		"local_dependency_metadata": localDependencyDigest(),
 	})
 	suiteHash := identity.Digest([]byte(treeHash + "\x00" + commandHash))
 	return protocol.EvidenceEnvelope{
@@ -71,6 +73,27 @@ func runOne(root, candidateID, treeHash, policyHash string, check config.Check) 
 		StartedAt: started, FinishedAt: time.Now().UTC(), ExitCode: exit,
 		ResultDigest: identity.Digest(raw), Output: strings.TrimSpace(string(raw)), TimedOut: ctx.Err() != nil,
 	}, nil
+}
+
+func localDependencyDigest() string {
+	var metadata []byte
+	seen := map[string]bool{}
+	for _, entry := range filepath.SplitList(os.Getenv("PATH")) {
+		if filepath.Base(entry) != ".bin" || filepath.Base(filepath.Dir(entry)) != "node_modules" {
+			continue
+		}
+		lock := filepath.Join(filepath.Dir(entry), ".package-lock.json")
+		if seen[lock] {
+			continue
+		}
+		seen[lock] = true
+		if raw, err := os.ReadFile(lock); err == nil {
+			metadata = append(metadata, []byte(lock)...)
+			metadata = append(metadata, 0)
+			metadata = append(metadata, raw...)
+		}
+	}
+	return identity.Digest(metadata)
 }
 
 func Passed(evidence []protocol.EvidenceEnvelope, expected int) bool {

@@ -24,7 +24,16 @@ type Broker struct {
 	State      protocol.TaskState
 }
 
+// RecordAbstention records a protocol-level failure without changing the
+// last verified checkpoint.
+func (b *Broker) RecordAbstention(reason string) (protocol.CompletionReceipt, error) {
+	return b.finish(protocol.VerdictAbstained, b.State.Checkpoint, nil, reason)
+}
+
 func New(root, mode string) (*Broker, error) {
+	if err := identity.EnsureLocalExclude(root, ".stateseal/"); err != nil {
+		return nil, err
+	}
 	p, raw, err := config.Load(root)
 	if err != nil {
 		return nil, err
@@ -93,6 +102,17 @@ func (b *Broker) AdmitManaged(m *worktree.Manager, proposal, source string) (pro
 		return protocol.CompletionReceipt{}, err
 	}
 	b.State.ProposalPath = proposal
+	head, err := identity.Git(m.Root, "rev-parse", "HEAD")
+	if err != nil {
+		return b.finish(protocol.VerdictAbstained, b.State.Checkpoint, nil, err.Error())
+	}
+	dirty, err := identity.Git(m.Root, "status", "--porcelain")
+	if err != nil {
+		return b.finish(protocol.VerdictAbstained, b.State.Checkpoint, nil, err.Error())
+	}
+	if strings.TrimSpace(string(head)) != m.Base || len(strings.TrimSpace(string(dirty))) > 0 {
+		return b.finish(protocol.VerdictStale, b.State.Checkpoint, nil, "trusted base changed during managed execution")
+	}
 	commit, err := m.CommitCandidate(proposal)
 	if err != nil {
 		return b.finish(protocol.VerdictAbstained, nil, nil, err.Error())
@@ -123,7 +143,10 @@ func (b *Broker) AdmitManaged(m *worktree.Manager, proposal, source string) (pro
 			return b.finish(protocol.VerdictRejected, nil, nil, "protected path changed: "+file)
 		}
 	}
-	baseTree := treeAt(m.Root, m.Base, b.Policy.State.Include)
+	baseTree, err := identity.Tree(m.Root, b.Policy.State.Include)
+	if err != nil {
+		return b.finish(protocol.VerdictAbstained, b.State.Checkpoint, nil, err.Error())
+	}
 	patch, _ := identity.Git(m.Root, "diff", "--binary", m.Base, commit)
 	candidate := protocol.CandidateState{CandidateID: identity.ID("cand"), TaskID: b.State.TaskID,
 		BaseTreeSHA256: baseTree, PatchSHA256: identity.Digest(patch), ResultTreeSHA256: tree,
@@ -213,11 +236,6 @@ func evidenceIDs(es []protocol.EvidenceEnvelope) []string {
 }
 func patchDigest(root string) string {
 	out, _ := identity.Git(root, "diff", "--binary", "HEAD")
-	return identity.Digest(out)
-}
-func treeAt(root, commit string, include []string) string {
-	// Git tree identity is used as a stable base identity; candidate identities use content hashing.
-	out, _ := identity.Git(root, "rev-parse", commit+"^{tree}")
 	return identity.Digest(out)
 }
 func exportWorkspaceReceipt(root string, r protocol.CompletionReceipt) {

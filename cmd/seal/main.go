@@ -66,7 +66,7 @@ func initCmd() *cobra.Command {
 		if err := config.Write(path, p); err != nil {
 			return codedError{10, err}
 		}
-		if err := ensureLocalExclude(root, ".stateseal/"); err != nil {
+		if err := identity.EnsureLocalExclude(root, ".stateseal/"); err != nil {
 			return codedError{10, err}
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "StateSeal policy written to %s\nDetected verifier: %s\nReview goal, protected paths, and commands before using enforce mode.\n", path, detected)
@@ -119,6 +119,8 @@ func runCmd() *cobra.Command {
 		if len(bytes.TrimSpace(dirty)) > 0 {
 			return codedError{10, fmt.Errorf("trusted base is dirty; commit or stash changes before seal run")}
 		}
+		restoreEnvironment := augmentLocalToolPath(root)
+		defer restoreEnvironment()
 		b, err := broker.New(root, mode)
 		if err != nil {
 			return codedError{10, err}
@@ -253,6 +255,12 @@ func serveSubmissions(stop <-chan struct{}, done chan<- struct{}, dir string, b 
 					err = json.Unmarshal(raw, &req)
 				}
 				var receipt protocol.CompletionReceipt
+				if req.ID == "" {
+					req.ID = strings.TrimSuffix(filepath.Base(path), ".request.json")
+				}
+				if err != nil {
+					receipt, _ = b.RecordAbstention("malformed intermediate submission: " + err.Error())
+				}
 				maxIntermediate := b.Policy.Budget.MaxCandidates - 1
 				if b.Policy.Budget.MaxCandidates > 0 && processed >= maxIntermediate {
 					err = fmt.Errorf("candidate budget exhausted; terminal candidate slot is reserved")
@@ -290,7 +298,10 @@ func statusCmd() *cobra.Command {
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(state)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Task:       %s\nStatus:     %s\nMode:       %s\nCoverage:   %s\n", state.TaskID, state.Status, state.Mode, state.Coverage)
+		fmt.Fprintf(cmd.OutOrStdout(), "Task:       %s\nStatus:     %s\nFreshness:  %s\nMode:       %s\nCoverage:   %s\n", state.TaskID, state.Status, state.Freshness, state.Mode, state.Coverage)
+		if state.StaleReason != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Stale:      %s\n", state.StaleReason)
+		}
 		if state.Checkpoint != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Checkpoint: %s\nTree:       %s\n", state.Checkpoint.CheckpointID, short(state.Checkpoint.TreeSHA256))
 		}
@@ -436,13 +447,28 @@ func detectChecks(root string) ([]config.Check, string) {
 		file, name string
 		command    []string
 	}
-	options := []candidate{{"go.mod", "go test", []string{"go", "test", "./..."}}, {"pyproject.toml", "pytest", []string{"pytest"}}, {"pytest.ini", "pytest", []string{"pytest"}}, {"package.json", "npm test", []string{"npm", "test", "--", "--runInBand"}}, {"Cargo.toml", "cargo test", []string{"cargo", "test"}}}
+	options := []candidate{{"go.mod", "go test", []string{"go", "test", "./..."}}, {"pyproject.toml", "pytest", []string{"pytest"}}, {"pytest.ini", "pytest", []string{"pytest"}}, {"package.json", "npm test", []string{"npm", "test"}}, {"Cargo.toml", "cargo test", []string{"cargo", "test"}}}
 	for _, c := range options {
 		if _, err := os.Stat(filepath.Join(root, c.file)); err == nil {
 			return []config.Check{{ID: "tests", Command: c.command, TimeoutSeconds: 900}}, c.name
 		}
 	}
 	return []config.Check{{ID: "review-required", Command: []string{"git", "diff", "--check"}, TimeoutSeconds: 60}}, "git diff --check (replace with project tests)"
+}
+
+func augmentLocalToolPath(root string) func() {
+	original := os.Getenv("PATH")
+	var additions []string
+	for _, rel := range []string{"node_modules/.bin", ".venv/bin", "venv/bin"} {
+		candidate := filepath.Join(root, filepath.FromSlash(rel))
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			additions = append(additions, candidate)
+		}
+	}
+	if len(additions) > 0 {
+		_ = os.Setenv("PATH", strings.Join(append(additions, original), string(os.PathListSeparator)))
+	}
+	return func() { _ = os.Setenv("PATH", original) }
 }
 
 func loadState() (protocol.TaskState, *store.Store, error) {
@@ -459,12 +485,20 @@ func loadState() (protocol.TaskState, *store.Store, error) {
 		return protocol.TaskState{}, nil, err
 	}
 	state, err := s.Load()
+	if err == nil {
+		state.Freshness, state.StaleReason = stateFreshness(root, rawPolicyDigest(root), state)
+	}
 	return state, s, err
 }
 
 func applyCheckpoint(root string, state protocol.TaskState, branch string) error {
 	if state.Receipt == nil || state.Receipt.Verdict != protocol.VerdictAdmitted || state.Checkpoint == nil {
 		return fmt.Errorf("only an admitted checkpoint can be applied")
+	}
+	policyDigest := rawPolicyDigest(root)
+	freshness, reason := stateFreshness(root, policyDigest, state)
+	if freshness != "CURRENT" {
+		return fmt.Errorf("admission is stale: %s", reason)
 	}
 	dirty, _ := identity.Git(root, "status", "--porcelain")
 	if len(bytes.TrimSpace(dirty)) > 0 {
@@ -480,6 +514,31 @@ func applyCheckpoint(root string, state protocol.TaskState, branch string) error
 	}
 	_, err := identity.Git(root, "cherry-pick", state.Checkpoint.Commit)
 	return err
+}
+
+func rawPolicyDigest(root string) string {
+	raw, err := os.ReadFile(filepath.Join(root, "seal.yaml"))
+	if err != nil {
+		return ""
+	}
+	return identity.Digest(raw)
+}
+
+func stateFreshness(root, policyDigest string, state protocol.TaskState) (string, string) {
+	if state.Receipt == nil {
+		return "MISSING", "no completion receipt"
+	}
+	if policyDigest == "" || policyDigest != state.Receipt.PolicyDigest {
+		return "STALE", "policy changed after admission"
+	}
+	head, err := identity.Git(root, "rev-parse", "HEAD")
+	if err != nil {
+		return "UNKNOWN", "current Git state is unavailable"
+	}
+	if strings.TrimSpace(string(head)) != state.BaseCommit {
+		return "STALE", "trusted base changed after admission"
+	}
+	return "CURRENT", ""
 }
 
 func printReceipt(cmd *cobra.Command, r protocol.CompletionReceipt) {
@@ -526,35 +585,6 @@ func adapterSource(exe string) string {
 		return "opencode-adapter"
 	}
 	return "command-adapter"
-}
-func ensureLocalExclude(root, pattern string) error {
-	out, err := identity.Git(root, "rev-parse", "--git-path", "info/exclude")
-	if err != nil {
-		return err
-	}
-	path := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, path)
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	for _, line := range strings.Split(string(raw), "\n") {
-		if strings.TrimSpace(line) == pattern {
-			return nil
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = fmt.Fprintf(f, "\n# StateSeal local evidence exports\n%s\n", pattern)
-	return err
 }
 func short(s string) string {
 	if len(s) > 12 {

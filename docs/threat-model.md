@@ -16,6 +16,8 @@ The primary adversary is an honest-but-fallible coding agent. StateSeal is desig
 
 The broker recomputes state identity, executes checks outside the agent process, records a hash-chained append-only ledger, and stores authority outside the repository.
 
+For Node projects, StateSeal may link an existing, Git-ignored `node_modules` directory into managed worktrees. The link target is broker-created, excluded from candidate identity, and its installed lock metadata contributes to the environment digest. This is dependency reuse, not dependency isolation or supply-chain attestation.
+
 ## Not covered in v0alpha1
 
 - A malicious process with the same OS-user permissions can tamper with local files or broker state.

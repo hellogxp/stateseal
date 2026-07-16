@@ -8,6 +8,7 @@ import (
 
 	"github.com/hellogxp/stateseal/internal/config"
 	"github.com/hellogxp/stateseal/internal/identity"
+	"github.com/hellogxp/stateseal/internal/worktree"
 	"github.com/hellogxp/stateseal/pkg/protocol"
 )
 
@@ -62,6 +63,40 @@ func TestReceiptTamperIsDetected(t *testing.T) {
 	os.WriteFile(path, b, 0o600)
 	if _, err := InspectReceipt(path); err == nil {
 		t.Fatal("tampered receipt accepted")
+	}
+}
+
+func TestManagedAdmissionRejectsConcurrentBaseChange(t *testing.T) {
+	root := testRepo(t)
+	checks := []config.Check{{ID: "pass", Command: []string{"sh", "-c", "true"}, TimeoutSeconds: 10}}
+	p := config.Default("concurrent-base", checks)
+	if err := config.Write(filepath.Join(root, "seal.yaml"), p); err != nil {
+		t.Fatal(err)
+	}
+	identity.Git(root, "add", "seal.yaml")
+	identity.Git(root, "commit", "-m", "policy")
+	b, err := New(root, "enforce")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := worktree.New(root, p.Task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal, err := m.Proposal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(proposal, "app.txt"), []byte("candidate"), 0o644)
+	os.WriteFile(filepath.Join(root, "base.txt"), []byte("advanced"), 0o644)
+	identity.Git(root, "add", "base.txt")
+	identity.Git(root, "commit", "-m", "advance base")
+	receipt, err := b.AdmitManaged(m, proposal, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Verdict != protocol.VerdictStale || b.State.Checkpoint != nil {
+		t.Fatalf("concurrent base change was not rejected: %+v", receipt)
 	}
 }
 

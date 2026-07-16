@@ -58,6 +58,36 @@ func Git(dir string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
+func EnsureLocalExclude(root, pattern string) error {
+	out, err := Git(root, "rev-parse", "--git-path", "info/exclude")
+	if err != nil {
+		return err
+	}
+	path := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		if strings.TrimSpace(line) == pattern {
+			return nil
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = fmt.Fprintf(f, "\n# StateSeal local state\n%s\n", pattern)
+	return err
+}
+
 func Tree(root string, include []string) (string, error) {
 	out, err := Git(root, "ls-files", "-co", "--exclude-standard", "-z")
 	if err != nil {

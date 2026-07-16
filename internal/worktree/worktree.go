@@ -35,12 +35,22 @@ func New(root, taskID string) (*Manager, error) {
 }
 
 func (m *Manager) Proposal() (string, error) {
-	path := filepath.Join(m.WorkDir, "proposal")
+	baseID := m.Base
+	if len(baseID) > 12 {
+		baseID = baseID[:12]
+	}
+	path := filepath.Join(m.WorkDir, "proposal-"+baseID)
 	if _, err := os.Stat(path); err == nil {
+		if err := m.linkIgnoredDependencies(path); err != nil {
+			return "", err
+		}
 		return path, nil
 	}
-	branch := "stateseal/" + sanitize(m.TaskID) + "-" + time.Now().UTC().Format("20060102-150405")
+	branch := "stateseal/" + sanitize(m.TaskID) + "-" + baseID + "-" + time.Now().UTC().Format("20060102-150405")
 	if _, err := identity.Git(m.Root, "worktree", "add", "-b", branch, path, m.Base); err != nil {
+		return "", err
+	}
+	if err := m.linkIgnoredDependencies(path); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -74,8 +84,41 @@ func (m *Manager) Evaluator(commit string) (string, func(), error) {
 	if _, err := identity.Git(m.Root, "worktree", "add", "--detach", path, commit); err != nil {
 		return "", nil, err
 	}
+	if err := m.linkIgnoredDependencies(path); err != nil {
+		_, _ = identity.Git(m.Root, "worktree", "remove", "--force", path)
+		return "", nil, err
+	}
 	cleanup := func() { _, _ = identity.Git(m.Root, "worktree", "remove", "--force", path) }
 	return path, cleanup, nil
+}
+
+func (m *Manager) linkIgnoredDependencies(targetRoot string) error {
+	for _, name := range []string{"node_modules"} {
+		source := filepath.Join(m.Root, name)
+		info, err := os.Stat(source)
+		if os.IsNotExist(err) || err == nil && !info.IsDir() {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(targetRoot, name)
+		if _, err := os.Lstat(target); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if _, err := identity.Git(targetRoot, "check-ignore", "-q", "--no-index", name+"/"); err != nil {
+			continue
+		}
+		if err := identity.EnsureLocalExclude(targetRoot, name); err != nil {
+			return err
+		}
+		if err := os.Symlink(source, target); err != nil {
+			return fmt.Errorf("link local dependency directory %s: %w", name, err)
+		}
+	}
+	return nil
 }
 
 func (m *Manager) ChangedFiles(base, commit string) ([]string, error) {

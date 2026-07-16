@@ -95,5 +95,7 @@ type TaskState struct {
 	Receipt      *CompletionReceipt  `json:"receipt,omitempty"`
 	Evidence     []EvidenceEnvelope  `json:"evidence,omitempty"`
 	LastError    string              `json:"last_error,omitempty"`
+	Freshness    string              `json:"freshness,omitempty"`
+	StaleReason  string              `json:"stale_reason,omitempty"`
 	UpdatedAt    time.Time           `json:"updated_at"`
 }
