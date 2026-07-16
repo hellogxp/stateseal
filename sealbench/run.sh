@@ -47,6 +47,9 @@ write_policy() {
   local admission_timeout=${5:-10}
   local completion_timeout=${6:-10}
   local max_candidates=${7:-8}
+  local admission_cwd=${8:-.}
+  local completion_cwd=${9:-.}
+  local max_wall_seconds=${10:-60}
   printf '%s\n' \
     'version: v0alpha1' \
     'task:' \
@@ -59,11 +62,13 @@ write_policy() {
     '  checks:' \
     '    - id: admission' \
     "      command: [\"sh\", \"-c\", \"$admission\"]" \
+    "      cwd: \"$admission_cwd\"" \
     "      timeout_seconds: $admission_timeout" \
     'completion:' \
     '  checks:' \
     '    - id: completion' \
     "      command: [\"sh\", \"-c\", \"$completion\"]" \
+    "      cwd: \"$completion_cwd\"" \
     "      timeout_seconds: $completion_timeout" \
     '  recertify_latest_checkpoint: true' \
     '  on_missing_evidence: abstain' \
@@ -73,7 +78,7 @@ write_policy() {
     '  network: inherit' \
     'budget:' \
     "  max_candidates: $max_candidates" \
-    '  max_wall_seconds: 60' \
+    "  max_wall_seconds: $max_wall_seconds" \
     'residual_risks:' \
     '  - SealBench evaluates control behavior, not specification completeness.' \
     > "$repo/seal.yaml"
@@ -114,7 +119,7 @@ printf 'base advanced\n' > "$repo/base.txt"
 git -C "$repo" add base.txt
 git -C "$repo" commit -q -m 'Advance trusted base'
 (cd "$repo" && "$SEAL" status --json | jq -e '.freshness == "STALE" and (.stale_reason | contains("trusted base"))' >/dev/null)
-(cd "$repo" && expect_code 11 "$SEAL" apply)
+(cd "$repo" && expect_code 3 "$SEAL" apply)
 pass SB003 wrong-branch-tree
 
 # SB004: command and cwd identities distinguish otherwise similar evidence.
@@ -125,7 +130,12 @@ cwd_a=$(cd "$repo_a" && "$SEAL" status --json | jq -r '.evidence[-1].cwd_digest'
 (cd "$repo_a" && "$SEAL" verify -- sh -c 'test -f app.txt' >/dev/null)
 cmd_b=$(cd "$repo_a" && "$SEAL" status --json | jq -r '.evidence[-1].command_digest')
 repo_b=$(new_repo sb004-b)
-(cd "$repo_b" && "$SEAL" init >/dev/null && "$SEAL" verify -- sh -c true >/dev/null)
+mkdir -p "$repo_b/checks"
+printf fixture > "$repo_b/checks/.keep"
+git -C "$repo_b" add checks
+write_policy "$repo_b" sb004-b true true 10 10 8 checks checks
+commit_policy "$repo_b"
+(cd "$repo_b" && "$SEAL" run -- sh -c true >/dev/null)
 cwd_b=$(cd "$repo_b" && "$SEAL" status --json | jq -r '.evidence[-1].cwd_digest')
 test "$cmd_a" != "$cmd_b"
 test "$cwd_a" != "$cwd_b"
@@ -143,7 +153,7 @@ commit_policy "$repo"
 printf '#!/bin/sh\nexit 1\n' > "$repo/check.sh"
 git -C "$repo" add check.sh
 git -C "$repo" commit -q -m 'Change verifier suite'
-(cd "$repo" && expect_code 11 "$SEAL" apply)
+(cd "$repo" && expect_code 3 "$SEAL" apply)
 pass SB005 suite-changed-after-pass
 
 # SB006: changing policy invalidates a prior admission receipt.
@@ -155,7 +165,7 @@ printf '\n# policy revision\n' >> "$repo/seal.yaml"
 git -C "$repo" add seal.yaml
 git -C "$repo" commit -q -m 'Revise StateSeal policy'
 (cd "$repo" && "$SEAL" status --json | jq -e '.freshness == "STALE" and (.stale_reason | contains("policy"))' >/dev/null)
-(cd "$repo" && expect_code 11 "$SEAL" apply)
+(cd "$repo" && expect_code 3 "$SEAL" apply)
 pass SB006 policy-changed-after-pass
 
 # SB007: edited receipt fields fail the structural integrity check.
@@ -170,18 +180,17 @@ pass SB007 receipt-tamper
 repo=$(new_repo sb008)
 write_policy "$repo" sb008 'grep -qx good app.txt' 'grep -qx good app.txt'
 commit_policy "$repo"
-(cd "$repo" && SEAL_BIN="$SEAL" expect_code 1 "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; printf "bad\n" > app.txt')
-(cd "$repo" && "$SEAL" status --json | jq -e '.status == "REJECTED" and .checkpoint.commit != ""' >/dev/null)
-(cd "$repo" && "$SEAL" restore >/dev/null)
-proposal=$(cd "$repo" && "$SEAL" status --json | jq -r '.proposal_path')
-grep -qx good "$proposal/app.txt"
+(cd "$repo" && SEAL_BIN="$SEAL" "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; printf "bad\n" > app.txt' >/dev/null)
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .receipt.recovered == true and .receipt.selection_reason == "terminal_candidate_regressed" and .receipt.terminal_candidate != .checkpoint.candidate_id' >/dev/null)
+(cd "$repo" && "$SEAL" apply >/dev/null)
+grep -qx good "$repo/app.txt"
 pass SB008 correct-then-regress
 
 # SB009: the failed terminal candidate cannot overwrite the checkpoint identity.
 repo=$(new_repo sb009)
 write_policy "$repo" sb009 'grep -qx good app.txt' 'grep -qx good app.txt'
 commit_policy "$repo"
-(cd "$repo" && SEAL_BIN="$SEAL" expect_code 1 "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; printf "bad\n" > app.txt')
+(cd "$repo" && SEAL_BIN="$SEAL" "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; printf "bad\n" > app.txt' >/dev/null)
 (cd "$repo" && "$SEAL" status --json | jq -e '.checkpoint.candidate_id != .candidate.candidate_id' >/dev/null)
 pass SB009 failed-proposal-overwrite
 
@@ -189,10 +198,8 @@ pass SB009 failed-proposal-overwrite
 repo=$(new_repo sb010)
 write_policy "$repo" sb010 'grep -qx good app.txt' 'grep -qx good app.txt' 10 10 2
 commit_policy "$repo"
-(cd "$repo" && SEAL_BIN="$SEAL" expect_code 1 "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; code=0; "$SEAL_BIN" submit >/dev/null 2>&1 || code=$?; test "$code" -eq 11; printf "bad\n" > app.txt')
-(cd "$repo" && "$SEAL" restore >/dev/null)
-proposal=$(cd "$repo" && "$SEAL" status --json | jq -r '.proposal_path')
-grep -qx good "$proposal/app.txt"
+(cd "$repo" && SEAL_BIN="$SEAL" "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; code=0; "$SEAL_BIN" submit >/dev/null 2>&1 || code=$?; test "$code" -eq 11; printf "bad\n" > app.txt' >/dev/null)
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .receipt.recovered == true' >/dev/null)
 pass SB010 budget-exhaustion-recovery
 
 # SB011: timeout evidence cannot admit a candidate.
@@ -243,5 +250,57 @@ commit_policy "$repo"
 (cd "$repo" && "$SEAL" status --json | jq -e '.checkpoint_coverage == "terminal-only"' >/dev/null)
 pass SB015 terminal-only-coverage
 
-test "$PASSED" -eq 15
-printf 'SealBench passed %d/15 deterministic failure-injection cases.\n' "$PASSED"
+# SB016: restore removes untracked residue and reproduces the checkpoint tree.
+repo=$(new_repo sb016)
+write_policy "$repo" sb016 true true
+commit_policy "$repo"
+(cd "$repo" && "$SEAL" run -- sh -c 'printf candidate > app.txt' >/dev/null)
+proposal=$(cd "$repo" && "$SEAL" status --json | jq -r '.proposal_path')
+printf residue > "$proposal/untracked.txt"
+(cd "$repo" && "$SEAL" restore >/dev/null)
+test ! -e "$proposal/untracked.txt"
+pass SB016 exact-checkpoint-restore
+
+# SB017: a verifier cwd that is not a directory is rejected without execution.
+repo=$(new_repo sb017)
+write_policy "$repo" sb017 true true 10 10 8 app.txt app.txt
+commit_policy "$repo"
+(cd "$repo" && expect_code 1 "$SEAL" run -- sh -c true)
+(cd "$repo" && "$SEAL" status --json | jq -e '.evidence[-1].exit_code == 126 and (.evidence[-1].output | contains("not a directory"))' >/dev/null)
+pass SB017 invalid-verifier-cwd
+
+# SB018: agent credentials are not inherited by verifier commands.
+repo=$(new_repo sb018)
+write_policy "$repo" sb018 'env | grep -q STATESEAL_TEST_SECRET && exit 1 || exit 0' true
+commit_policy "$repo"
+(cd "$repo" && STATESEAL_TEST_SECRET=must-not-leak "$SEAL" run -- sh -c 'printf candidate > app.txt' >/dev/null)
+pass SB018 verifier-secret-filtering
+
+# SB019: background verifier children are terminated with their process group.
+repo=$(new_repo sb019)
+write_policy "$repo" sb019 'sleep 30 & echo $!' 'sleep 30 & echo $!'
+commit_policy "$repo"
+(cd "$repo" && "$SEAL" run -- sh -c 'printf candidate > app.txt' >/dev/null)
+child_pid=$(cd "$repo" && "$SEAL" status --json | jq -r '.evidence[-1].output')
+if kill -0 "$child_pid" 2>/dev/null; then
+  printf 'verifier child %s survived process-group cleanup\n' "$child_pid" >&2
+  exit 1
+fi
+pass SB019 verifier-process-cleanup
+
+# SB020: wall-budget exhaustion recertifies the last checkpoint and kills agent children.
+repo=$(new_repo sb020)
+write_policy "$repo" sb020 'grep -qx good app.txt' 'grep -qx good app.txt' 10 10 8 . . 1
+commit_policy "$repo"
+(cd "$repo" && SEAL_BIN="$SEAL" "$SEAL" run -- sh -c 'printf "good\n" > app.txt; "$SEAL_BIN" submit >/dev/null; sleep 30 & echo $! > agent-child.pid; printf "bad\n" > app.txt; wait' >/dev/null)
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .receipt.recovered == true and .receipt.selection_reason == "wall_budget_exhausted"' >/dev/null)
+proposal=$(cd "$repo" && "$SEAL" status --json | jq -r '.proposal_path')
+agent_child_pid=$(cat "$proposal/agent-child.pid")
+if kill -0 "$agent_child_pid" 2>/dev/null; then
+  printf 'agent child %s survived wall-budget cleanup\n' "$agent_child_pid" >&2
+  exit 1
+fi
+pass SB020 wall-budget-recovery
+
+test "$PASSED" -eq 20
+printf 'SealBench passed %d/20 deterministic failure-injection cases.\n' "$PASSED"

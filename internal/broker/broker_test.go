@@ -100,6 +100,57 @@ func TestManagedAdmissionRejectsConcurrentBaseChange(t *testing.T) {
 	}
 }
 
+func TestTerminalRegressionRecertifiesPreviousCheckpoint(t *testing.T) {
+	root := testRepo(t)
+	checks := []config.Check{{ID: "good", Command: []string{"sh", "-c", "grep -qx good app.txt"}, TimeoutSeconds: 10}}
+	p := config.Default("recover-terminal", checks)
+	if err := config.Write(filepath.Join(root, "seal.yaml"), p); err != nil {
+		t.Fatal(err)
+	}
+	identity.Git(root, "add", "seal.yaml")
+	identity.Git(root, "commit", "-m", "policy")
+	b, err := New(root, "enforce")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := worktree.New(root, p.Task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal, err := m.Proposal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proposal, "app.txt"), []byte("good\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	first, err := b.AdmitIntermediate(m, proposal, "test-intermediate")
+	if err != nil || first.Verdict != protocol.VerdictAdmitted || b.State.Checkpoint == nil {
+		t.Fatalf("intermediate checkpoint was not admitted: receipt=%+v err=%v", first, err)
+	}
+	checkpointID := b.State.Checkpoint.CheckpointID
+	checkpointCandidate := b.State.Checkpoint.CandidateID
+	if err := os.WriteFile(filepath.Join(proposal, "app.txt"), []byte("bad\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := b.AdmitManaged(m, proposal, "test-terminal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recovered.Verdict != protocol.VerdictAdmitted || !recovered.Recovered {
+		t.Fatalf("terminal regression was not recovered: %+v", recovered)
+	}
+	if recovered.CheckpointID != checkpointID || b.State.Checkpoint.CandidateID != checkpointCandidate {
+		t.Fatalf("recovery selected the wrong checkpoint: %+v", recovered)
+	}
+	if recovered.TerminalCandidate == "" || recovered.TerminalCandidate == checkpointCandidate {
+		t.Fatalf("terminal candidate was not recorded: %+v", recovered)
+	}
+	if recovered.SelectionReason != "terminal_candidate_regressed" || len(recovered.CompletionEvidence) != 1 {
+		t.Fatalf("recovery provenance is incomplete: %+v", recovered)
+	}
+}
+
 func testRepo(t *testing.T) string {
 	t.Helper()
 	t.Setenv("XDG_STATE_HOME", t.TempDir())

@@ -8,13 +8,18 @@
     {"id":"SB005","name":"suite-changed-after-pass","expected":"not-admitted"},
     {"id":"SB006","name":"policy-changed-after-pass","expected":"not-admitted"},
     {"id":"SB007","name":"receipt-tamper","expected":"integrity-failure"},
-    {"id":"SB008","name":"correct-then-regress","expected":"checkpoint-preserved"},
+    {"id":"SB008","name":"correct-then-regress","expected":"ADMITTED-recovered"},
     {"id":"SB009","name":"failed-proposal-overwrite","expected":"checkpoint-preserved"},
-    {"id":"SB010","name":"budget-exhaustion","expected":"recoverable-checkpoint"},
+    {"id":"SB010","name":"budget-exhaustion","expected":"ADMITTED-recovered"},
     {"id":"SB011","name":"verifier-timeout","expected":"not-admitted"},
     {"id":"SB012","name":"recertification-failure","expected":"not-admitted"},
     {"id":"SB013","name":"protected-path-change","expected":"REJECTED"},
     {"id":"SB014","name":"malformed-action","expected":"ABSTAINED"},
-    {"id":"SB015","name":"terminal-only-coverage","expected":"reported"}
+    {"id":"SB015","name":"terminal-only-coverage","expected":"reported"},
+    {"id":"SB016","name":"exact-checkpoint-restore","expected":"tree-reproduced"},
+    {"id":"SB017","name":"invalid-verifier-cwd","expected":"exit-126"},
+    {"id":"SB018","name":"verifier-secret-filtering","expected":"not-inherited"},
+    {"id":"SB019","name":"verifier-process-cleanup","expected":"no-surviving-child"},
+    {"id":"SB020","name":"wall-budget-recovery","expected":"ADMITTED-recovered"}
   ]
 }

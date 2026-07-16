@@ -6,6 +6,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/hellogxp/stateseal/internal/identity"
+	"github.com/hellogxp/stateseal/pkg/protocol"
 )
 
 func TestDetectChecksUsesPortableNPMTest(t *testing.T) {
@@ -16,6 +19,37 @@ func TestDetectChecksUsesPortableNPMTest(t *testing.T) {
 	checks, detected := detectChecks(root)
 	if detected != "npm test" || len(checks) != 1 || !reflect.DeepEqual(checks[0].Command, []string{"npm", "test"}) {
 		t.Fatalf("unexpected Node detection: %s %+v", detected, checks)
+	}
+}
+
+func TestApplyCheckpointFastForwardsExactVerifiedCommit(t *testing.T) {
+	root := t.TempDir()
+	identity.Git(root, "init", "-b", "main")
+	identity.Git(root, "config", "user.name", "Test")
+	identity.Git(root, "config", "user.email", "test@example.com")
+	os.WriteFile(filepath.Join(root, "app.txt"), []byte("base\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "seal.yaml"), []byte("policy\n"), 0o644)
+	identity.Git(root, "add", ".")
+	identity.Git(root, "commit", "-m", "base")
+	baseRaw, _ := identity.Git(root, "rev-parse", "HEAD")
+	base := strings.TrimSpace(string(baseRaw))
+	os.WriteFile(filepath.Join(root, "app.txt"), []byte("verified\n"), 0o644)
+	identity.Git(root, "add", "app.txt")
+	identity.Git(root, "commit", "-m", "verified")
+	checkpointRaw, _ := identity.Git(root, "rev-parse", "HEAD")
+	checkpoint := strings.TrimSpace(string(checkpointRaw))
+	identity.Git(root, "reset", "--hard", base)
+	state := protocol.TaskState{
+		BaseCommit: base,
+		Checkpoint: &protocol.VerifiedCheckpoint{Commit: checkpoint},
+		Receipt:    &protocol.CompletionReceipt{Verdict: protocol.VerdictAdmitted, PolicyDigest: rawPolicyDigest(root)},
+	}
+	if err := applyCheckpoint(root, state, ""); err != nil {
+		t.Fatal(err)
+	}
+	headRaw, _ := identity.Git(root, "rev-parse", "HEAD")
+	if strings.TrimSpace(string(headRaw)) != checkpoint {
+		t.Fatalf("apply did not select the exact checkpoint: %s", headRaw)
 	}
 }
 

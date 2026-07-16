@@ -74,3 +74,33 @@ func TestProposalLinksIgnoredNodeModules(t *testing.T) {
 		t.Fatalf("managed dependency entered symlink policy: %v %v", unsafe, err)
 	}
 }
+
+func TestRestoreRemovesTrackedAndUntrackedCandidateArtifacts(t *testing.T) {
+	root := t.TempDir()
+	identity.Git(root, "init", "-b", "main")
+	identity.Git(root, "config", "user.name", "Test")
+	identity.Git(root, "config", "user.email", "test@example.com")
+	os.WriteFile(filepath.Join(root, "state.txt"), []byte("trusted\n"), 0o644)
+	identity.Git(root, "add", ".")
+	identity.Git(root, "commit", "-m", "initial")
+	m, err := New(root, "restore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal, err := m.Proposal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(proposal, "state.txt"), []byte("regressed\n"), 0o644)
+	os.WriteFile(filepath.Join(proposal, "untracked.txt"), []byte("residue\n"), 0o644)
+	if err := m.Restore(proposal, m.Base); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(filepath.Join(proposal, "state.txt"))
+	if err != nil || string(contents) != "trusted\n" {
+		t.Fatalf("tracked state was not restored: %q %v", contents, err)
+	}
+	if _, err := os.Stat(filepath.Join(proposal, "untracked.txt")); !os.IsNotExist(err) {
+		t.Fatalf("untracked candidate artifact survived restore: %v", err)
+	}
+}
