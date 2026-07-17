@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/hellogxp/stateseal/internal/broker"
+	"github.com/hellogxp/stateseal/internal/buildinfo"
 	"github.com/hellogxp/stateseal/internal/config"
 	"github.com/hellogxp/stateseal/internal/identity"
 	processctl "github.com/hellogxp/stateseal/internal/process"
@@ -22,8 +23,6 @@ import (
 	"github.com/hellogxp/stateseal/pkg/protocol"
 	"github.com/spf13/cobra"
 )
-
-var version = "dev"
 
 func main() {
 	root := newRoot()
@@ -49,9 +48,33 @@ type staleStateError struct{ reason string }
 func (e staleStateError) Error() string { return e.reason }
 
 func newRoot() *cobra.Command {
+	info := buildinfo.Current()
 	cmd := &cobra.Command{Use: "seal", Short: "Transactional admission for coding-agent changes", SilenceUsage: true, SilenceErrors: true}
-	cmd.Version = version
-	cmd.AddCommand(initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd())
+	cmd.Version = info.Version
+	cmd.SetVersionTemplate("seal {{.Version}}\n")
+	cmd.AddCommand(versionCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd())
+	return cmd
+}
+
+func versionCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Show version and build identity",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			info := buildinfo.Current()
+			if jsonOut {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(info)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "StateSeal %s\nCommit:    %s\nBuilt:     %s\nGo:        %s\nPlatform:  %s\n", info.Version, info.Commit, info.BuildDate, info.GoVersion, info.Platform)
+			if info.Modified {
+				fmt.Fprintln(cmd.OutOrStdout(), "Modified:  yes")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit machine-readable build information")
 	return cmd
 }
 

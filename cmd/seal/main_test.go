@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,6 +12,25 @@ import (
 	"github.com/hellogxp/stateseal/internal/identity"
 	"github.com/hellogxp/stateseal/pkg/protocol"
 )
+
+func TestVersionCommandSupportsMachineReadableOutput(t *testing.T) {
+	cmd := newRoot()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"version", "--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var info map[string]any
+	if err := json.Unmarshal(out.Bytes(), &info); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"version", "commit", "build_date", "go_version", "platform"} {
+		if info[key] == nil || info[key] == "" {
+			t.Fatalf("version output is missing %s: %s", key, out.String())
+		}
+	}
+}
 
 func TestInstallCodexHooksPreservesExistingHooks(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".codex", "hooks.json")

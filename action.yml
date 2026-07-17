@@ -11,6 +11,11 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache: true
     - name: Build StateSeal
       shell: bash
       working-directory: ${{ github.action_path }}

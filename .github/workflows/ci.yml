@@ -20,6 +20,15 @@ jobs:
       - run: go test -race ./...
       - run: go vet ./...
       - run: go build -trimpath ./cmd/seal
+      - name: Validate release packaging
+        env:
+          VERSION: v0.0.0-ci
+          TARGETS: linux/amd64
+        run: |
+          sh -n scripts/build-release.sh scripts/install.sh
+          scripts/build-release.sh
+          tar -xzf dist/stateseal_0.0.0-ci_linux_amd64.tar.gz -C dist
+          dist/stateseal_0.0.0-ci_linux_amd64/seal version --json | grep -q '"version":"v0.0.0-ci"'
 
   sealbench:
     runs-on: ubuntu-latest

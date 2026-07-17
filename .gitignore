@@ -1,4 +1,5 @@
 /bin/
+/dist/
 /.stateseal/
 *.out
 .DS_Store

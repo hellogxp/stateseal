@@ -10,4 +10,13 @@ Before opening a pull request:
 4. avoid adding an LLM dependency to the admission path;
 5. keep protocol changes backward-compatible or include migration notes.
 
+Release packaging changes must also pass:
+
+```bash
+VERSION=v0.0.0-test TARGETS="$(go env GOOS)/$(go env GOARCH)" scripts/build-release.sh
+```
+
+Inspect the packaged binary with `seal version --json` and verify that version,
+commit, build date, Go version, and platform are present.
+
 Use professional, imperative commit subjects. Do not include generated credentials, local receipts, or private task state.

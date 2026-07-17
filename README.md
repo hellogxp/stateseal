@@ -23,7 +23,24 @@ When a terminal candidate regresses after an earlier checkpoint was verified, St
 
 ## Quick start
 
-Requirements: Git and Go 1.24 or newer.
+Requirements: Git. Release binaries do not require Go.
+
+Install the latest verified release on macOS or Linux:
+
+```bash
+curl -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh -o install-stateseal.sh
+less install-stateseal.sh
+sh install-stateseal.sh
+rm install-stateseal.sh
+```
+
+The installer selects the current OS and architecture and verifies the archive
+against the release checksum before installing `seal` to `~/.local/bin`.
+Install a specific version with `--version v0.1.0-alpha.1`, or set
+`STATESEAL_INSTALL_DIR` to choose another destination.
+
+Until the first binary release is published, install from source with Go 1.24
+or newer:
 
 ```bash
 go install github.com/hellogxp/stateseal/cmd/seal@latest
@@ -161,6 +178,18 @@ make build
 make sealbench
 make stackbench
 ```
+
+Build a local release snapshot with embedded version and commit identity:
+
+```bash
+make release-snapshot VERSION=v0.1.0-alpha.1
+tar -xzf dist/stateseal_0.1.0-alpha.1_$(go env GOOS)_$(go env GOARCH).tar.gz -C dist
+dist/stateseal_0.1.0-alpha.1_$(go env GOOS)_$(go env GOARCH)/seal version
+```
+
+Tagging a semantic version runs the full verification suite and publishes
+macOS/Linux archives for AMD64/ARM64, `checksums.txt`, and the reviewed installer.
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 For networks that block the Git transport but allow the GitHub API, maintainers can publish a committed tree without storing credentials:
 
