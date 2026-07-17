@@ -80,6 +80,7 @@ func versionCmd() *cobra.Command {
 
 func initCmd() *cobra.Command {
 	var force bool
+	var taskID, goal string
 	cmd := &cobra.Command{Use: "init", Short: "Create a reviewed-by-default StateSeal policy", RunE: func(cmd *cobra.Command, _ []string) error {
 		root, err := identity.GitRoot(".")
 		if err != nil {
@@ -90,17 +91,27 @@ func initCmd() *cobra.Command {
 			return codedError{10, fmt.Errorf("%s already exists; use --force to replace it", path)}
 		}
 		checks, detected := detectChecks(root)
-		p := config.Default(filepath.Base(root), checks)
+		if taskID == "" {
+			taskID = identity.NormalizeTaskID(filepath.Base(root))
+		} else if err := identity.ValidateTaskID(taskID); err != nil {
+			return codedError{10, err}
+		}
+		p := config.Default(taskID, checks)
+		if goal != "" {
+			p.Task.Goal = goal
+		}
 		if err := config.Write(path, p); err != nil {
 			return codedError{10, err}
 		}
 		if err := identity.EnsureLocalExclude(root, ".stateseal/"); err != nil {
 			return codedError{10, err}
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "StateSeal policy written to %s\nDetected verifier: %s\nReview goal, protected paths, and commands before using enforce mode.\n", path, detected)
+		fmt.Fprintf(cmd.OutOrStdout(), "StateSeal initialized\n\nPolicy:    %s\nTask:      %s\nVerifier:  %s\nMode:      enforce (default)\n\nNext:\n  1. Review task.goal, protected paths, and verifier commands in seal.yaml.\n  2. Run `seal doctor`.\n  3. Run `seal verify -- %s`.\n  4. Start an Agent with `seal run -- <agent> [args...]`.\n", path, p.Task.ID, detected, shellJoin(checks[0].Command))
 		return nil
 	}}
 	cmd.Flags().BoolVar(&force, "force", false, "replace an existing policy")
+	cmd.Flags().StringVar(&taskID, "task-id", "", "stable task identifier (defaults to the repository name)")
+	cmd.Flags().StringVar(&goal, "goal", "", "intended outcome recorded in the policy")
 	return cmd
 }
 

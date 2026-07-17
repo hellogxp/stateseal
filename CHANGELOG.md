@@ -15,6 +15,8 @@ the version fields in its JSON schemas.
   GitHub Copilot CLI, and OpenCode.
 - Deterministic SealBench failure-injection and stack compatibility suites.
 - Cross-platform release artifacts with embedded build identity and checksums.
+- Actionable initialization output, explicit task goals, and repository-safe
+  task identifiers.
 
 ### Security
 

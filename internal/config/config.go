@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/hellogxp/stateseal/internal/identity"
 	"gopkg.in/yaml.v3"
 )
 
@@ -104,8 +105,8 @@ func (p Policy) Validate() error {
 	if p.Version != "v0alpha1" {
 		return fmt.Errorf("unsupported policy version %q", p.Version)
 	}
-	if p.Task.ID == "" {
-		return errors.New("task.id is required")
+	if err := identity.ValidateTaskID(p.Task.ID); err != nil {
+		return fmt.Errorf("task.id: %w", err)
 	}
 	for group, checks := range map[string][]Check{"admission": p.Admission.Checks, "completion": p.Completion.Checks} {
 		if len(checks) == 0 {

@@ -16,6 +16,9 @@ import (
 type Store struct{ Dir string }
 
 func Open(repoRoot, taskID string) (*Store, error) {
+	if err := identity.ValidateTaskID(taskID); err != nil {
+		return nil, fmt.Errorf("unsafe authority-state task ID: %w", err)
+	}
 	repoID := identity.Digest([]byte(repoRoot))[:20]
 	base, err := stateHome()
 	if err != nil {

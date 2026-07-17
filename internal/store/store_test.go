@@ -31,6 +31,12 @@ func TestLedgerRejectsTampering(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsTaskIDPathTraversal(t *testing.T) {
+	if _, err := Open(t.TempDir(), "../../escape"); err == nil {
+		t.Fatal("unsafe task ID was accepted")
+	}
+}
+
 func TestReadEventsValidatesAndReturnsTimeline(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	s, err := Open("/repo", "timeline")

@@ -1,0 +1,45 @@
+version: v0alpha1
+task:
+  id: stateseal-core
+  goal: Preserve StateSeal admission invariants while evolving the product.
+state:
+  include:
+    - "**"
+  protected:
+    - seal.yaml
+    - .git/**
+    - .stateseal/**
+    - .codex/**
+    - .claude/**
+    - .gemini/**
+    - .cursor/**
+    - .opencode/**
+    - .github/hooks/**
+    - .github/workflows/**
+admission:
+  timeout_seconds: 900
+  checks:
+    - id: unit-tests
+      command: [go, test, ./...]
+      timeout_seconds: 900
+completion:
+  timeout_seconds: 1200
+  checks:
+    - id: race-tests
+      command: [go, test, -race, ./...]
+      timeout_seconds: 900
+    - id: vet
+      command: [go, vet, ./...]
+      timeout_seconds: 300
+  recertify_latest_checkpoint: true
+  on_missing_evidence: abstain
+  on_stale_evidence: reject
+execution:
+  clean_worktree: true
+  network: inherit
+budget:
+  max_candidates: 8
+  max_wall_seconds: 1800
+residual_risks:
+  - Cross-platform behavior beyond the tested CI matrix was not evaluated.
+  - The execution host and dependency supply chain were not independently attested.

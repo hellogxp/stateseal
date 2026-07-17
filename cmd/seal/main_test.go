@@ -9,9 +9,44 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hellogxp/stateseal/internal/config"
 	"github.com/hellogxp/stateseal/internal/identity"
 	"github.com/hellogxp/stateseal/pkg/protocol"
 )
+
+func TestInitCreatesActionablePolicy(t *testing.T) {
+	root := t.TempDir()
+	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/service\n\ngo 1.24\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+
+	cmd := newRoot()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"init", "--task-id", "payment-idempotency", "--goal", "Repeated callbacks create one charge."})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	policy, _, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policy.Task.ID != "payment-idempotency" || policy.Task.Goal != "Repeated callbacks create one charge." {
+		t.Fatalf("unexpected task identity: %+v", policy.Task)
+	}
+	if got := policy.Completion.Checks[0].Command; !reflect.DeepEqual(got, []string{"go", "test", "./..."}) {
+		t.Fatalf("unexpected verifier: %v", got)
+	}
+	for _, expected := range []string{"StateSeal initialized", "seal doctor", "seal verify -- go test ./...", "seal run -- <agent>"} {
+		if !strings.Contains(out.String(), expected) {
+			t.Fatalf("init output is missing %q: %s", expected, out.String())
+		}
+	}
+}
 
 func TestVersionCommandSupportsMachineReadableOutput(t *testing.T) {
 	cmd := newRoot()

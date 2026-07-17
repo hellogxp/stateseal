@@ -6,7 +6,17 @@
   "required": ["version", "task", "state", "admission", "completion", "execution", "budget"],
   "properties": {
     "version": {"const": "v0alpha1"},
-    "task": {"type": "object", "required": ["id", "goal"]},
+    "task": {
+      "type": "object",
+      "required": ["id", "goal"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "goal": {"type": "string"}
+      }
+    },
     "state": {"type": "object", "required": ["include", "protected"]},
     "admission": {"$ref": "#/$defs/checkSet"},
     "completion": {"allOf": [{"$ref": "#/$defs/checkSet"}]},

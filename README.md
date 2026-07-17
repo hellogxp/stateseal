@@ -46,7 +46,7 @@ or newer:
 go install github.com/hellogxp/stateseal/cmd/seal@latest
 
 cd your-project
-seal init
+seal init --goal "Repeated callbacks must create exactly one charge."
 # Review seal.yaml before enforcing it.
 seal adapter list
 # Install the adapter for the agent you use, for example:
