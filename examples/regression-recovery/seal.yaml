@@ -1,0 +1,39 @@
+version: v0alpha1
+task:
+  id: alarm-deduplication
+  goal: Duplicate alarm identifiers must be emitted exactly once.
+state:
+  include:
+    - counter.go
+    - counter_test.go
+    - go.mod
+  protected:
+    - seal.yaml
+    - agent.sh
+    - fixtures/**
+    - .git/**
+    - .stateseal/**
+admission:
+  timeout_seconds: 60
+  checks:
+    - id: targeted-tests
+      command: [go, test, ./...]
+      timeout_seconds: 60
+completion:
+  timeout_seconds: 60
+  checks:
+    - id: full-suite
+      command: [go, test, ./...]
+      timeout_seconds: 60
+  recertify_latest_checkpoint: true
+  on_missing_evidence: abstain
+  on_stale_evidence: reject
+execution:
+  clean_worktree: true
+  network: inherit
+budget:
+  max_candidates: 4
+  max_wall_seconds: 300
+residual_risks:
+  - Only the included Go source and configured tests were evaluated.
+  - The execution host was not independently attested.

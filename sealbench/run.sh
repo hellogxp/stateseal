@@ -345,5 +345,23 @@ for spec in 'claude PostToolUse tool_input' 'gemini AfterTool tool_input' 'curso
 done
 pass SB023 cross-agent-lifecycle-matrix
 
-test "$PASSED" -eq 23
-printf 'SealBench passed %d/23 deterministic failure-injection cases.\n' "$PASSED"
+# SB024: sandboxed Agents receive writable build caches outside candidate state.
+repo=$(new_repo sb024)
+write_policy "$repo" sb024 true true
+commit_policy "$repo"
+(cd "$repo" && "$SEAL" run -- sh -c '
+  test -n "$STATESEAL_RUNTIME_ROOT"
+  for dir in "$GOCACHE" "$GOTMPDIR" "$PYTHONPYCACHEPREFIX" "$npm_config_cache" "$CARGO_TARGET_DIR"; do
+    test -d "$dir"
+    case "$dir" in "$STATESEAL_PROPOSAL_ROOT"/*) exit 1 ;; esac
+    printf writable > "$dir/stateseal-probe"
+  done
+  printf candidate > app.txt
+' >/dev/null)
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED"' >/dev/null)
+proposal=$(cd "$repo" && "$SEAL" status --json | jq -r '.proposal_path')
+test ! -e "$proposal/stateseal-probe"
+pass SB024 managed-agent-cache
+
+test "$PASSED" -eq 24
+printf 'SealBench passed %d/24 deterministic failure-injection cases.\n' "$PASSED"

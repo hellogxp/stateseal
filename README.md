@@ -44,6 +44,17 @@ or newer:
 
 ```bash
 go install github.com/hellogxp/stateseal/cmd/seal@latest
+```
+
+From a source checkout, experience verified-checkpoint recovery end to end:
+
+```bash
+make experience
+```
+
+Then use StateSeal in your own repository:
+
+```bash
 
 cd your-project
 seal init --goal "Repeated callbacks must create exactly one charge."
@@ -177,6 +188,13 @@ make test
 make build
 make sealbench
 make stackbench
+```
+
+Live Agent compatibility checks are opt-in because they invoke an authenticated
+Agent and are not deterministic:
+
+```bash
+make live-codex
 ```
 
 Build a local release snapshot with embedded version and commit identity:

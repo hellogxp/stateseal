@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -200,7 +201,18 @@ func runCmd() *cobra.Command {
 		processctl.ConfigureGroup(agent)
 		agent.Dir, agent.Stdin, agent.Stdout, agent.Stderr = proposal, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
 		adapterChecks, _ := json.Marshal(checkCommandStrings(b.Policy))
-		agent.Env = append(os.Environ(), "STATESEAL_TASK_ID="+b.State.TaskID, "STATESEAL_PROPOSAL_ROOT="+proposal, "STATESEAL_ORIGINAL_ROOT="+root, "STATESEAL_SUBMIT_DIR="+requestDir, "STATESEAL_MODE="+mode, "STATESEAL_ADAPTER_CHECKS="+string(adapterChecks))
+		agentEnv, err := agentCacheEnvironment(os.Environ(), os.TempDir(), b.Store.Dir)
+		if err != nil {
+			return codedError{11, err}
+		}
+		agent.Env = mergeEnvironment(agentEnv, map[string]string{
+			"STATESEAL_TASK_ID":        b.State.TaskID,
+			"STATESEAL_PROPOSAL_ROOT":  proposal,
+			"STATESEAL_ORIGINAL_ROOT":  root,
+			"STATESEAL_SUBMIT_DIR":     requestDir,
+			"STATESEAL_MODE":           mode,
+			"STATESEAL_ADAPTER_CHECKS": string(adapterChecks),
+		})
 		agentErr := agent.Run()
 		_ = processctl.KillGroup(agent)
 		close(stopBroker)
@@ -606,6 +618,43 @@ func augmentLocalToolPath(root string) func() {
 		_ = os.Setenv("PATH", strings.Join(append(additions, original), string(os.PathListSeparator)))
 	}
 	return func() { _ = os.Setenv("PATH", original) }
+}
+
+func agentCacheEnvironment(base []string, tempRoot, storeDir string) ([]string, error) {
+	runtimeRoot := filepath.Join(tempRoot, "stateseal-agent", identity.Digest([]byte(storeDir))[:20])
+	dirs := map[string]string{
+		"GOCACHE":             filepath.Join(runtimeRoot, "go-build"),
+		"GOTMPDIR":            filepath.Join(runtimeRoot, "go-tmp"),
+		"PYTHONPYCACHEPREFIX": filepath.Join(runtimeRoot, "python-cache"),
+		"npm_config_cache":    filepath.Join(runtimeRoot, "npm-cache"),
+		"CARGO_TARGET_DIR":    filepath.Join(runtimeRoot, "cargo-target"),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return nil, fmt.Errorf("create managed Agent cache: %w", err)
+		}
+	}
+	dirs["STATESEAL_RUNTIME_ROOT"] = runtimeRoot
+	return mergeEnvironment(base, dirs), nil
+}
+
+func mergeEnvironment(base []string, overrides map[string]string) []string {
+	environment := make([]string, 0, len(base)+len(overrides))
+	for _, entry := range base {
+		key, _, _ := strings.Cut(entry, "=")
+		if _, replaced := overrides[key]; !replaced {
+			environment = append(environment, entry)
+		}
+	}
+	keys := make([]string, 0, len(overrides))
+	for key := range overrides {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		environment = append(environment, key+"="+overrides[key])
+	}
+	return environment
 }
 
 func loadState() (protocol.TaskState, *store.Store, error) {

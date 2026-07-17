@@ -41,6 +41,10 @@ seal adapter opencode install
 | GitHub Copilot CLI | `postToolUse` | `agentStop` | `.github/hooks/stateseal.json` |
 | OpenCode | `tool.execute.after` | `session.idle` | `.opencode/plugins/stateseal.js` |
 
+Generated configuration is not treated as proof of runtime compatibility. See
+[the live compatibility matrix](compatibility.md) for validated Agent versions,
+coverage, and known lifecycle limits.
+
 The mappings follow each product's public extension surface: [Codex
 hooks](https://learn.chatgpt.com/docs/hooks), [Claude Code
 hooks](https://code.claude.com/docs/en/hooks), [Gemini CLI
@@ -94,6 +98,13 @@ The managed agent receives:
 - `STATESEAL_SUBMIT_DIR`
 - `STATESEAL_MODE`
 - `STATESEAL_ADAPTER_CHECKS`
+- `STATESEAL_RUNTIME_ROOT`
+
+StateSeal also redirects common language build caches (`GOCACHE`, `GOTMPDIR`,
+`PYTHONPYCACHEPREFIX`, `npm_config_cache`, and `CARGO_TARGET_DIR`) to a managed
+temporary runtime directory. This keeps generated cache files out of candidate
+identity and gives sandboxed Agents a writable location without weakening the
+proposal worktree boundary.
 
 The submission directory is an opaque request/response channel. The broker's
 state, ledger, checkpoint selection, receipt digest, and verifier execution

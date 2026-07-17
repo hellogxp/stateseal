@@ -23,6 +23,7 @@
     {"id":"SB020","name":"wall-budget-recovery","expected":"ADMITTED-recovered"},
     {"id":"SB021","name":"codex-hook-boundary","expected":"ADMITTED-recovered"},
     {"id":"SB022","name":"mode-disposition","expected":"observed-and-overridden"},
-    {"id":"SB023","name":"cross-agent-lifecycle-matrix","expected":"ADMITTED-recovered"}
+    {"id":"SB023","name":"cross-agent-lifecycle-matrix","expected":"ADMITTED-recovered"},
+    {"id":"SB024","name":"managed-agent-cache","expected":"writable-outside-candidate"}
   ]
 }

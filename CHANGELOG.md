@@ -17,6 +17,12 @@ the version fields in its JSON schemas.
 - Cross-platform release artifacts with embedded build identity and checksums.
 - Actionable initialization output, explicit task goals, and repository-safe
   task identifiers.
+- A deterministic, disposable regression-recovery experience that exercises
+  checkpoint preservation and fresh terminal recertification end to end.
+- Managed language-tool caches for sandboxed Agents, keeping generated build
+  state outside candidate identity while preserving writable test execution.
+- Live Codex lifecycle validation and a versioned compatibility matrix that
+  distinguishes runtime evidence from generated adapter contracts.
 
 ### Security
 

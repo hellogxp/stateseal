@@ -233,3 +233,35 @@ func TestAugmentLocalToolPath(t *testing.T) {
 		t.Fatal("PATH was not restored")
 	}
 }
+
+func TestAgentCacheEnvironmentUsesManagedWritablePaths(t *testing.T) {
+	tempRoot := t.TempDir()
+	environment, err := agentCacheEnvironment([]string{"PATH=/bin", "GOCACHE=/unwritable"}, tempRoot, "/state/task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]string{}
+	for _, entry := range environment {
+		key, value, _ := strings.Cut(entry, "=")
+		values[key] = value
+	}
+	if values["PATH"] != "/bin" {
+		t.Fatalf("unrelated environment was not preserved: %v", values)
+	}
+	for _, key := range []string{"GOCACHE", "GOTMPDIR", "PYTHONPYCACHEPREFIX", "npm_config_cache", "CARGO_TARGET_DIR"} {
+		value := values[key]
+		if !strings.HasPrefix(value, tempRoot+string(os.PathSeparator)) {
+			t.Fatalf("%s escaped the managed cache root: %s", key, value)
+		}
+		if info, err := os.Stat(value); err != nil || !info.IsDir() {
+			t.Fatalf("%s cache was not created: %v", key, err)
+		}
+	}
+}
+
+func TestMergeEnvironmentReplacesDuplicateKeys(t *testing.T) {
+	got := mergeEnvironment([]string{"A=old", "B=keep", "A=older"}, map[string]string{"A": "new"})
+	if !reflect.DeepEqual(got, []string{"B=keep", "A=new"}) {
+		t.Fatalf("unexpected environment: %v", got)
+	}
+}
