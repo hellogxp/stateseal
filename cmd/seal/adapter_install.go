@@ -53,6 +53,18 @@ func installCodexHooks(path, binary string, force bool) error {
 }
 
 func installNestedHooks(path, binary, agent string, force bool, specs []nestedHookSpec) error {
+	return installNestedHooksForCommand(path, binary, agent, "hook", force, specs)
+}
+
+func installUserNestedHooks(path, binary, agent string, force bool, specs []nestedHookSpec) error {
+	subcommand := "hook"
+	if agent == "codex" {
+		subcommand = "desktop-hook"
+	}
+	return installNestedHooksForCommand(path, binary, agent, subcommand, force, specs)
+}
+
+func installNestedHooksForCommand(path, binary, agent, subcommand string, force bool, specs []nestedHookSpec) error {
 	root, err := readJSONObject(path)
 	if err != nil {
 		return err
@@ -62,13 +74,13 @@ func installNestedHooks(path, binary, agent string, force bool, specs []nestedHo
 		hooks = map[string]any{}
 		root["hooks"] = hooks
 	}
-	marker := adapterMarker(agent)
+	marker := adapterCommandMarker(agent, subcommand)
 	for _, spec := range specs {
 		groups, _ := hooks[spec.event].([]any)
 		if force || containsMarker(groups, marker) {
 			groups = removeMarkedNestedGroups(groups, marker)
 		}
-		handler := map[string]any{"type": "command", "command": hookCommandLine(binary, agent, spec.event)}
+		handler := map[string]any{"type": "command", "command": adapterCommandLine(binary, agent, subcommand, spec.event)}
 		if agent == "gemini" {
 			handler["name"] = "stateseal-" + strings.ToLower(spec.event)
 			handler["description"] = "Submit a state-bound candidate to StateSeal"
@@ -76,7 +88,7 @@ func installNestedHooks(path, binary, agent string, force bool, specs []nestedHo
 		} else {
 			handler["timeout"] = spec.timeout
 			if agent == "codex" {
-				handler["statusMessage"] = "Sealing candidate state"
+				handler["statusMessage"] = codexHookStatus(spec.event)
 			}
 		}
 		group := map[string]any{"hooks": []any{handler}}
@@ -86,6 +98,21 @@ func installNestedHooks(path, binary, agent string, force bool, specs []nestedHo
 		hooks[spec.event] = append(groups, group)
 	}
 	return writeJSONObject(path, root)
+}
+
+func codexHookStatus(event string) string {
+	switch event {
+	case "SessionStart":
+		return "Restoring StateSeal session"
+	case "UserPromptSubmit":
+		return "Preparing verified delivery"
+	case "PreToolUse":
+		return "Enforcing StateSeal boundary"
+	case "PostToolUse":
+		return "Updating StateSeal delivery"
+	default:
+		return "Sealing candidate state"
+	}
 }
 
 func installDirectHooks(path, binary, agent string, force bool, events []string) error {
@@ -168,10 +195,18 @@ export const StateSealPlugin = async () => ({
 }
 
 func hookCommandLine(binary, agent, event string) string {
-	return shellQuote(binary) + " " + adapterMarker(agent) + " " + shellQuote(event)
+	return adapterCommandLine(binary, agent, "hook", event)
 }
 
 func adapterMarker(agent string) string { return "adapter " + agent + " hook" }
+
+func adapterCommandMarker(agent, subcommand string) string {
+	return "adapter " + agent + " " + subcommand
+}
+
+func adapterCommandLine(binary, agent, subcommand, event string) string {
+	return shellQuote(binary) + " " + adapterCommandMarker(agent, subcommand) + " " + shellQuote(event)
+}
 
 func readJSONObject(path string) (map[string]any, error) {
 	root := map[string]any{}

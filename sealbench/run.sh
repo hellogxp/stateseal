@@ -387,5 +387,34 @@ jq -e '.theme == "dark" and ([.hooks.Stop[][]?] | tostring | contains("notify-ex
 jq -e '.theme == "dark" and ([.hooks.Stop[][]?] | tostring | contains("notify-existing")) and (tostring | contains("adapter qoder hook") | not)' "$integration_config" >/dev/null
 pass SB026 user-integration-mutation-safety
 
-test "$PASSED" -eq 26
-printf 'SealBench passed %d/26 deterministic failure-injection cases.\n' "$PASSED"
+# SB027: a Codex Desktop session delegates work, waits for acceptance, and
+# applies only the exact verified checkpoint.
+repo=$(new_repo sb027)
+fake_bin="$ROOT/sb027-bin"
+mkdir -p "$fake_bin"
+printf '%s\n' '#!/bin/sh' 'printf "desktop candidate\n" > app.txt' > "$fake_bin/codex"
+chmod +x "$fake_bin/codex"
+session_id=sb027-desktop-session
+jq -n --arg session "$session_id" --arg cwd "$repo" '{hook_event_name:"UserPromptSubmit",session_id:$session,turn_id:"turn-1",cwd:$cwd,prompt:"StateSeal: implement the verified Desktop candidate"}' \
+  | "$SEAL" adapter codex desktop-hook UserPromptSubmit \
+  | jq -e '.hookSpecificOutput.additionalContext | contains("first-project confirmation")' >/dev/null
+jq -n --arg session "$session_id" --arg cwd "$repo" '{hook_event_name:"UserPromptSubmit",session_id:$session,turn_id:"turn-2",cwd:$cwd,prompt:"yes"}' \
+  | "$SEAL" adapter codex desktop-hook UserPromptSubmit \
+  | jq -e '.hookSpecificOutput.additionalContext | contains("desktop run --session")' >/dev/null
+(cd "$repo" && PATH="$fake_bin:$PATH" "$SEAL" desktop run --session "$session_id" \
+  | jq -e '.stage == "PENDING_APPLY" and .verdict == "ADMITTED" and .changed_files == 1' >/dev/null)
+grep -qx original "$repo/app.txt"
+jq -n --arg session "$session_id" --arg cwd "$repo" '{hook_event_name:"PreToolUse",session_id:$session,turn_id:"turn-2",cwd:$cwd,tool_name:"apply_patch",tool_input:{command:"direct edit"}}' \
+  | "$SEAL" adapter codex desktop-hook PreToolUse \
+  | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
+# Change the repository's generic active-task pointer. Desktop apply must still
+# select the exact task and receipt bound to its session authority state.
+(cd "$repo" && "$SEAL" verify -- sh -c true >/dev/null)
+(cd "$repo" && "$SEAL" desktop apply --session "$session_id" \
+  | jq -e '.stage == "APPLIED" and .verdict == "ADMITTED" and (.branch | startswith("feature/"))' >/dev/null)
+grep -qx 'desktop candidate' "$repo/app.txt"
+(cd "$repo" && "$SEAL" desktop status --session "$session_id" | jq -e '.stage == "APPLIED"' >/dev/null)
+pass SB027 codex-desktop-controlled-delivery
+
+test "$PASSED" -eq 27
+printf 'SealBench passed %d/27 deterministic failure-injection cases.\n' "$PASSED"

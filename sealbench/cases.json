@@ -26,6 +26,7 @@
     {"id":"SB023","name":"cross-agent-lifecycle-matrix","expected":"ADMITTED-recovered"},
     {"id":"SB024","name":"managed-agent-cache","expected":"writable-outside-candidate"},
     {"id":"SB025","name":"no-progress-escalation","expected":"ESCALATED"},
-    {"id":"SB026","name":"user-integration-mutation-safety","expected":"unrelated-config-preserved"}
+    {"id":"SB026","name":"user-integration-mutation-safety","expected":"unrelated-config-preserved"},
+    {"id":"SB027","name":"codex-desktop-controlled-delivery","expected":"verified-before-user-accepted-apply"}
   ]
 }

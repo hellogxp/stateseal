@@ -91,6 +91,11 @@ func integrateCmd() *cobra.Command {
 			if spec.Restart {
 				fmt.Fprintln(cmd.OutOrStdout(), integrationText(locale, "Restart the Agent application so it reloads the hook configuration.", "请重启 Agent 应用，使其重新加载 Hook 配置。"))
 			}
+			if spec.ID == "codex" {
+				fmt.Fprintln(cmd.OutOrStdout(), integrationText(locale,
+					"Open a new Codex session, run /hooks, and trust the reviewed StateSeal hook definition once.",
+					"请新建 Codex 会话，执行 /hooks，检查并信任 StateSeal Hook 定义一次。"))
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), integrationText(locale,
 				"The first managed task in each repository will ask you to confirm its verification policy.",
 				"每个项目首次执行受控任务时，StateSeal 会要求确认项目验证策略。"))
@@ -162,7 +167,11 @@ func integrationDoctorCmd() *cobra.Command {
 			if err := validateUserIntegration(spec, path); err != nil {
 				return codedError{10, err}
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "✓ %s integration configuration\n✓ PostToolUse boundary\n✓ Stop boundary\nSupport: %s\n", spec.DisplayName, spec.SupportLevel)
+			fmt.Fprintf(cmd.OutOrStdout(), "✓ %s integration configuration\n", spec.DisplayName)
+			for _, event := range integrationEvents(spec) {
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ %s boundary\n", event)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Support: %s\n", spec.SupportLevel)
 			return nil
 		},
 	}
@@ -231,16 +240,38 @@ func installUserIntegration(spec integrationSpec, path, binary string, force boo
 	if err := backupIntegrationConfig(path); err != nil {
 		return err
 	}
-	timeout := 1800
-	matcher := "^Bash$"
-	if spec.ID == "qoder" {
-		timeout = 30
-		matcher = "^(Bash|run_in_terminal)$"
+	if spec.ID == "codex" {
+		if _, err := removeIntegrationMarkers(path, []string{adapterMarker("codex")}, []string{"PostToolUse", "Stop"}); err != nil {
+			return fmt.Errorf("migrate legacy Codex integration: %w", err)
+		}
 	}
-	return installNestedHooks(path, binary, spec.ID, force, []nestedHookSpec{
-		{"PostToolUse", matcher, timeout},
-		{"Stop", "", timeout},
-	})
+	return installUserNestedHooks(path, binary, spec.ID, force, integrationHookSpecs(spec))
+}
+
+func integrationHookSpecs(spec integrationSpec) []nestedHookSpec {
+	switch spec.ID {
+	case "codex":
+		return []nestedHookSpec{
+			{"SessionStart", "startup|resume", 30},
+			{"UserPromptSubmit", "", 30},
+			{"PreToolUse", "*", 30},
+			{"PostToolUse", "*", 1800},
+			{"Stop", "", 1800},
+		}
+	case "qoder":
+		return []nestedHookSpec{{"PostToolUse", "^(Bash|run_in_terminal)$", 30}, {"Stop", "", 30}}
+	default:
+		return []nestedHookSpec{{"PostToolUse", "^Bash$", 1800}, {"Stop", "", 1800}}
+	}
+}
+
+func integrationEvents(spec integrationSpec) []string {
+	specs := integrationHookSpecs(spec)
+	events := make([]string, 0, len(specs))
+	for _, hook := range specs {
+		events = append(events, hook.event)
+	}
+	return events
 }
 
 func backupIntegrationConfig(path string) error {
@@ -273,8 +304,8 @@ func validateUserIntegration(spec integrationSpec, path string) error {
 	if !ok {
 		return fmt.Errorf("%s has no hooks object", path)
 	}
-	marker := adapterMarker(spec.ID)
-	for _, event := range []string{"PostToolUse", "Stop"} {
+	marker := userIntegrationMarker(spec)
+	for _, event := range integrationEvents(spec) {
 		if !containsMarker(hooks[event], marker) {
 			return fmt.Errorf("%s integration is missing %s", spec.DisplayName, event)
 		}
@@ -283,6 +314,14 @@ func validateUserIntegration(spec integrationSpec, path string) error {
 }
 
 func removeUserIntegration(spec integrationSpec, path string) (bool, error) {
+	markers := []string{userIntegrationMarker(spec)}
+	if spec.ID == "codex" {
+		markers = append(markers, adapterMarker(spec.ID))
+	}
+	return removeIntegrationMarkers(path, markers, integrationEvents(spec))
+}
+
+func removeIntegrationMarkers(path string, markers, events []string) (bool, error) {
 	root, err := readJSONObject(path)
 	if err != nil {
 		return false, err
@@ -291,14 +330,15 @@ func removeUserIntegration(spec integrationSpec, path string) (bool, error) {
 	if hooks == nil {
 		return false, nil
 	}
-	marker := adapterMarker(spec.ID)
 	removed := false
-	for _, event := range []string{"PostToolUse", "Stop"} {
+	for _, event := range events {
 		groups, _ := hooks[event].([]any)
-		if containsMarker(groups, marker) {
-			removed = true
+		for _, marker := range markers {
+			if containsMarker(groups, marker) {
+				removed = true
+			}
+			groups = removeMarkedNestedGroups(groups, marker)
 		}
-		groups = removeMarkedNestedGroups(groups, marker)
 		if len(groups) == 0 {
 			delete(hooks, event)
 		} else {
@@ -309,6 +349,13 @@ func removeUserIntegration(spec integrationSpec, path string) (bool, error) {
 		return false, nil
 	}
 	return true, writeJSONObject(path, root)
+}
+
+func userIntegrationMarker(spec integrationSpec) string {
+	if spec.ID == "codex" {
+		return adapterCommandMarker(spec.ID, "desktop-hook")
+	}
+	return adapterMarker(spec.ID)
 }
 
 func integrationText(locale i18n.Locale, english, chinese string) string {
