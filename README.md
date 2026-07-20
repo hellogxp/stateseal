@@ -55,19 +55,33 @@ make experience
 Then use StateSeal in your own repository:
 
 ```bash
+seal integrate codex-desktop   # once for this Agent on this computer
 cd your-project
 seal run "修复重复回调导致的重复扣款，并保持现有接口兼容"
 ```
 
-On the first run, StateSeal detects an installed Agent and project checks,
-merges its lifecycle integration, and asks once before committing the protected
-configuration. It then runs the Agent loop in an isolated proposal, evaluates
-the exact candidate in clean worktrees, and asks one final delivery question.
+`seal integrate` non-destructively merges user-level lifecycle hooks and keeps a
+safety backup of the original configuration. Codex, Claude Code, and Qoder
+integrations can be inspected with `seal integrate status` and removed without
+touching unrelated hooks. User-level Desktop integration is currently
+experimental; the authoritative delivery path is still the managed `seal run`
+process.
+
+On the first managed run in a repository, StateSeal shows the detected project
+type, exact admission and completion commands, and protected configuration. The
+user confirms that verification contract once before StateSeal commits it as
+auditable project infrastructure. StateSeal then runs the Agent loop in an
+isolated proposal, evaluates the exact candidate in clean worktrees, and asks
+one final delivery question.
 StateSeal follows the operating system message locale automatically and falls
 back to English. Use `--agent`, `--apply`, or `--no-apply` when explicit control
 is needed. The default view reports real lifecycle events, check results, and
 durations; use `--verbose` for the Agent stream, `--quiet` for the final status
 only, or `--json` for automation. Your branch is unchanged until apply succeeds.
+
+See [Getting started](docs/getting-started.md) for the complete installation,
+integration, first-project confirmation, delivery, and uninstall flow. A
+[Simplified Chinese guide](docs/getting-started.zh-CN.md) is also available.
 
 ## Policy
 
@@ -86,6 +100,7 @@ state:
     - ".stateseal/**"
     - ".codex/**"
     - ".claude/**"
+    - ".qoder/**"
     - ".gemini/**"
     - ".cursor/**"
     - ".opencode/**"
@@ -127,6 +142,10 @@ Admission checks decide whether a candidate is worth preserving. Completion chec
 
 | Command | Purpose |
 | --- | --- |
+| `seal integrate <agent>` | Install a user-level lifecycle integration once per Agent (`codex-desktop`, `claude-code`, or `qoder`) |
+| `seal integrate status` | Show installed integrations and their honest support level |
+| `seal integrate doctor <agent>` | Validate the configured lifecycle boundaries |
+| `seal integrate uninstall <agent>` | Remove only StateSeal-owned user hooks |
 | `seal run "…"` | Detect or reuse an Agent, show trustworthy progress, independently verify the development loop, and offer delivery (`--verbose`, `--quiet`, and `--json` supported) |
 | `seal setup --agent …` | Explicitly configure a repository Agent integration |
 | `seal init` | Legacy policy-only initialization |
@@ -157,8 +176,8 @@ and a stable `rule_id`. See [the reliability rule taxonomy](docs/rules.md).
 
 StateSeal v0alpha1 is designed for honest-but-fallible coding agents. A Git worktree is isolation from accidental edits, not a security sandbox. A malicious process running as the same OS user may alter local state. Protected CI must perform a clean checkout and fresh verification; it must not trust a receipt committed in a pull request.
 
-The core protocol is agent-agnostic. Codex, Claude Code, Gemini CLI, Cursor
-Agent, GitHub Copilot CLI, and OpenCode integrations are thin lifecycle
+The core protocol is agent-agnostic. Codex, Claude Code, Qoder, Gemini CLI,
+Cursor Agent, GitHub Copilot CLI, and OpenCode integrations are thin lifecycle
 adapters; every other terminal agent still works through `seal run -- <agent>`
 with mandatory terminal recertification.
 
@@ -179,6 +198,13 @@ existing agent → proposal worktree → candidate
 ```
 
 Authoritative state and the hash-chained event ledger live outside the repository under the platform state directory. Exported `.stateseal/receipts/*.json` files are shareable records, not admission authority.
+
+StateSeal does not ship a separate Desktop application. Existing Agent Desktop
+and IDE products integrate through their native lifecycle configuration; the
+same Go broker, evaluator, checkpoint, and receipt protocol remains
+authoritative. See the [current product map](docs/product-map.md) and
+[compatibility evidence](docs/compatibility.md). The product map is also
+available in [Simplified Chinese](docs/product-map.zh-CN.md).
 
 ## Development
 

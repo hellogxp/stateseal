@@ -34,6 +34,13 @@ the version fields in its JSON schemas.
   evidence, final recertification, and explicit delivery-basis reporting.
 - Automatic system-locale matching with English fallback, plus dedicated
   default, verbose, quiet, and stable JSON output modes.
+- User-level `seal integrate` management for Codex, Claude Code, and Qoder,
+  including non-destructive merge, safety backup, static doctor, status, and
+  selective uninstall.
+- Qoder CLI/IDE/JetBrains lifecycle support based on its shared hook contract,
+  including the blocking Stop exit code and retry-loop guard.
+- A first-project confirmation view that shows the exact admission and
+  completion commands before creating auditable project configuration.
 
 ### Security
 

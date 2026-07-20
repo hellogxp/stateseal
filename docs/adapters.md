@@ -9,6 +9,7 @@ seal run "Implement the requested change"
 # Advanced compatibility mode:
 seal run -- codex exec "Implement the requested change"
 seal run -- claude -p "Implement the requested change"
+seal run -- qodercli --prompt "Implement the requested change"
 seal run -- gemini -p "Implement the requested change"
 seal run -- cursor-agent -p "Implement the requested change"
 seal run -- copilot -p "Implement the requested change"
@@ -23,12 +24,38 @@ lifecycle integration therefore reduces checkpoint coverage to
 
 ## Native lifecycle integrations
 
+StateSeal has two integration scopes:
+
+```text
+user scope       seal integrate <agent>       once per Agent and computer
+project scope    first seal run / seal setup  once per repository
+```
+
+User scope preserves existing configuration and installs lifecycle entry
+points shared by the Agent's CLI/Desktop or IDE surfaces:
+
+```bash
+seal integrate codex-desktop
+seal integrate claude-code
+seal integrate qoder
+
+seal integrate status
+seal integrate doctor qoder
+seal integrate uninstall qoder
+```
+
+Installation alone is not proof of end-to-end compatibility. The current
+Desktop integrations are marked experimental until session-to-project binding,
+isolated workspace routing, failure recovery, and a live compatibility run all
+pass. Until then, `seal run` remains the authoritative managed path.
+
 Use `seal adapter list` to inspect the built-in matrix and install only the
 agents used by the repository:
 
 ```bash
 seal adapter codex install
 seal adapter claude install
+seal adapter qoder install
 seal adapter gemini install
 seal adapter cursor install
 seal adapter copilot install
@@ -39,6 +66,7 @@ seal adapter opencode install
 | --- | --- | --- | --- |
 | Codex | `PostToolUse` | `Stop` | `.codex/hooks.json` |
 | Claude Code | `PostToolUse` | `Stop` | `.claude/settings.json` |
+| Qoder | `PostToolUse` | `Stop` | `.qoder/settings.json` |
 | Gemini CLI | `AfterTool` | `AfterAgent` | `.gemini/settings.json` |
 | Cursor Agent | `afterShellExecution` | `stop` | `.cursor/hooks.json` |
 | GitHub Copilot CLI | `postToolUse` | `agentStop` | `.github/hooks/stateseal.json` |
@@ -54,7 +82,10 @@ hooks](https://code.claude.com/docs/en/hooks), [Gemini CLI
 hooks](https://geminicli.com/docs/hooks/reference/), [Cursor
 hooks](https://cursor.com/docs/hooks), [GitHub Copilot
 hooks](https://docs.github.com/en/copilot/reference/hooks-reference), and
-[OpenCode plugins](https://opencode.ai/docs/plugins/).
+[OpenCode plugins](https://opencode.ai/docs/plugins/). Qoder's
+[official hooks documentation](https://docs.qoder.com/extensions/hooks)
+explicitly shares user and project configuration across CLI, IDE, and its
+JetBrains plugin.
 
 Commit generated adapter files as protected infrastructure. The goal-driven
 workflow does this during its confirmed first-run setup. Codex requires trust
@@ -77,8 +108,12 @@ verdict back to the agent. Shadow and warn modes never force another turn.
 Regardless of native retry behavior, the outer `seal run` process makes the
 final decision and can recover a previously verified checkpoint.
 
-Retry capability is reported honestly: Codex, Claude Code, Gemini CLI,
+Retry capability is reported honestly: Codex, Claude Code, Gemini CLI, Qoder,
 Cursor Agent, and Copilot CLI expose a stop decision or follow-up mechanism.
+Qoder requires exit code `2` for a blocking `Stop` and marks the retry with
+`stop_hook_active`; StateSeal releases that retry to prevent an infinite hook
+loop, while the outer managed run still performs authoritative terminal
+recertification.
 OpenCode's current `session.idle` plugin event is observational and cannot
 restart the agent loop, so its outer StateSeal process performs enforcement.
 Cursor hooks remain a beta product surface; terminal recertification remains
