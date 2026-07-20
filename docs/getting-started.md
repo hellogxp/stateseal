@@ -28,16 +28,10 @@ seal integrate codex-desktop
 # or: seal integrate qoder
 ```
 
-StateSeal merges lifecycle entries into the Agent's existing user
-configuration, writes a one-time safety backup, and performs a static
-conformance check. It does not replace unrelated hooks. Codex Desktop uses
-`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop` to
-bind the conversation, prevent direct source-worktree editing during a managed
-turn, and return the delivery decision to the same conversation.
-
-Codex requires a native trust review for non-managed command hooks. Open a new
-Codex session, run `/hooks`, inspect the exact StateSeal definition, and trust
-it once. StateSeal does not bypass this review for ordinary Desktop use.
+For Codex Desktop, StateSeal registers a local MCP server in
+`~/.codex/config.toml`, writes a one-time safety backup, and performs both static
+validation and a live MCP initialize/tool handshake. Existing models, projects,
+MCP servers, and unrelated hooks are preserved. No `/hooks` command is needed.
 
 Inspect or undo the integration at any time:
 
@@ -107,22 +101,23 @@ specification completeness, and remote CI remain explicit residual risks.
 
 ## Codex Desktop path
 
-After `seal integrate codex-desktop`, open the Git repository in Codex Desktop
-and use the explicit marker once per managed task:
+After `seal integrate codex-desktop`, restart Codex Desktop, choose the local
+environment, open the Git repository, and describe the goal normally:
 
 ```text
-StateSeal: Add input validation, preserve compatibility, and include tests
+Add input validation, preserve compatibility, and include tests
 ```
 
-StateSeal binds the Codex `session_id`, repository, goal, and generated task id
-in authority state outside the repository. On the first project task, Codex
-shows the detected admission and completion commands and asks for confirmation.
-After confirmation, the parent Desktop turn can invoke only the exact StateSeal
-delegation command; direct editing tools are denied. The isolated child Agent
-runs the same workflow as `seal run --no-apply --json`.
+The MCP server first inspects the project without changing it. On first use,
+Codex shows the detected admission checks, completion checks, protected paths,
+and residual risks, then opens its native approval UI for `enable_project`.
+StateSeal commits the approved contract as `seal.yaml`; it does not ask again
+unless that policy changes.
 
-When verification succeeds, the Desktop conversation reports the receipt and
-residual risks and asks whether to apply. A plain `yes` applies the exact
-checkpoint to a feature branch; `no` leaves the user branch unchanged. Internal
-`seal desktop` commands are adapter-facing recovery surfaces and normally do
-not need to be typed by the user.
+The isolated child Agent then runs the same authoritative workflow as
+`seal run --no-apply --json`, while the source workspace remains unchanged.
+When verification succeeds, the conversation reports the exact receipt,
+coverage, checks, and residual risks. A second native approval gates
+`apply_verified`; the supplied session and receipt must exactly match the
+admitted checkpoint. Rejecting it leaves the branch unchanged. The user never
+needs to type a `StateSeal:` prefix or internal `seal desktop` command.

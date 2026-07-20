@@ -21,10 +21,11 @@ flowchart TD
     J --> K["用户确认并应用已验证代码"]
 ```
 
-通用权威路径仍由 `seal run` 启动。Codex Desktop 现在可以把
-`StateSeal: <目标>` 委托给同一条权威路径，同时在原对话中完成首次合同确认和
-最终应用确认；在固定 Desktop 版本完成实机 conformance 前仍标记为
-experimental。其他 Desktop/IDE adapter 当前只完成生命周期基础。
+通用权威路径仍由 `seal run` 启动。Codex Desktop 通过 MCP 自动识别普通开发
+目标并委托给同一条权威路径；项目合同启用和最终应用由 Agent 原生工具授权
+控制，不需要提示词前缀或 Hook 信任命令。在固定 Desktop 版本完成实机
+conformance 前仍标记为 experimental。其他 Desktop/IDE adapter 当前只完成
+生命周期基础。
 
 ## 技术架构
 
@@ -36,7 +37,8 @@ flowchart LR
     end
 
     subgraph Adapter["薄适配层"]
-        EVENT["Prompt / Tool / Stop 生命周期"]
+        EVENT["CLI 生命周期 Hook"]
+        MCP["Desktop MCP 工具"]
         CONF["能力声明与一致性检查"]
     end
 
@@ -54,7 +56,8 @@ flowchart LR
     end
 
     CLI --> EVENT
-    DESKTOP --> EVENT
+    DESKTOP --> MCP
+    MCP --> CONF
     EVENT --> CONF --> SESSION
     SESSION --> PROPOSAL --> BROKER
     BROKER --> EVALUATOR --> VERIFIER --> BROKER
@@ -72,7 +75,7 @@ flowchart LR
 | Hash-chain ledger 与 state-bound receipt | 已实现 |
 | Codex、Claude、Qoder 用户级集成管理 | 已实现；Desktop/IDE 仍为 experimental |
 | Qoder 项目 adapter | 已通过确定性合同测试；等待实机验证 |
-| Codex Desktop 完整受控交付 | 确定性端到端链路已实现；等待固定 Desktop 版本实机 conformance |
+| Codex Desktop 完整受控交付 | MCP 握手、策略授权、精确 receipt 应用的确定性端到端链路已通过；等待固定 Desktop 版本实机 conformance |
 | Claude、Qoder、Cursor 实机兼容矩阵 | 待完成 |
 | StateSeal Desktop App | 明确不做 |
 | 云 Dashboard、多 Agent 编排 | 暂缓 |

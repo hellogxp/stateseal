@@ -22,10 +22,11 @@ flowchart TD
 ```
 
 The portable authoritative path starts the controlled task with `seal run`.
-Codex Desktop now delegates `StateSeal: <goal>` into that same authoritative
-path while retaining confirmation in the original conversation. It remains
-experimental until pinned live Desktop conformance. Other Desktop/IDE adapters
-currently provide the lifecycle foundation only.
+Codex Desktop uses MCP to route an ordinary code-changing prompt into that same
+path. Native tool approval gates the one-time project contract and final apply;
+no prompt prefix or hook-trust command is required. It remains experimental
+until pinned live Desktop conformance. Other Desktop/IDE adapters currently
+provide the lifecycle foundation only.
 
 ## Product architecture
 
@@ -36,8 +37,9 @@ flowchart LR
         DESKTOP["Desktop / IDE"]
     end
 
-    subgraph Thin_Adapters["Thin lifecycle adapters"]
-        EVENTS["Prompt / tool / stop events"]
+    subgraph Thin_Adapters["Thin Agent adapters"]
+        EVENTS["CLI lifecycle events"]
+        MCP["Desktop MCP tools"]
         CAP["Capability and conformance checks"]
     end
 
@@ -55,7 +57,8 @@ flowchart LR
     end
 
     CLI --> EVENTS
-    DESKTOP --> EVENTS
+    DESKTOP --> MCP
+    MCP --> CAP
     EVENTS --> CAP --> SESSION
     SESSION --> PROPOSAL --> BROKER
     BROKER --> EVALUATOR --> VERIFIER
@@ -69,7 +72,7 @@ flowchart LR
 | --- | --- | --- |
 | User | Goal, verification-contract approval, final apply | Running every check manually |
 | Agent | Analysis, implementation, self-testing, repair loop | Final admission verdict |
-| Adapter | Native lifecycle translation and feedback | Verification policy or authority |
+| Adapter | Native MCP/lifecycle translation and feedback | Verification policy or authority |
 | StateSeal core | State identity, admission, checkpoint, recertification, receipt | Writing product code |
 | Verifier | Executable evidence for configured checks | Specification completeness |
 | Git | Reproducible trees and delivery transaction | Verifier independence or host trust |
@@ -85,7 +88,7 @@ flowchart LR
 | Hash-chained ledger and state-bound receipt | Implemented |
 | User-level Codex/Claude/Qoder integration management | Implemented; Desktop/IDE level remains experimental |
 | Qoder project adapter | Deterministic contract tests implemented; live validation pending |
-| Codex Desktop managed delivery | Deterministic end-to-end path implemented; pinned live Desktop conformance pending |
+| Codex Desktop managed delivery | MCP initialize/tool handshake and deterministic exact-receipt delivery pass; pinned live Desktop conformance pending |
 | Claude Code, Qoder, Cursor live compatibility | Pending pinned-version validation |
 | StateSeal Desktop application | Explicitly out of scope |
 | Cloud dashboard and multi-Agent orchestration | Deferred |

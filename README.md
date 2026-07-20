@@ -61,24 +61,26 @@ seal run "修复重复回调导致的重复扣款，并保持现有接口兼容"
 ```
 
 Or stay inside Codex Desktop after the one-time integration, open the Git
-project, and submit an explicitly managed goal:
+project, and describe the development goal normally:
 
 ```text
-StateSeal: 修复重复回调导致的重复扣款，并保持现有接口兼容
+修复重复回调导致的重复扣款，并保持现有接口兼容
 ```
 
-The Desktop conversation presents the first-project verification contract,
+The Desktop conversation detects the code-changing request through StateSeal's
+MCP routing instructions. On first use it shows the detected verification
+contract and opens the Agent's native approval for `enable_project`. It then
 delegates implementation to an isolated StateSeal-managed Codex process, shows
-the verified result, and waits for explicit acceptance before applying it.
+the state-bound receipt and residual risks, and opens a second native approval
+before `apply_verified` can change the user's branch.
 
-`seal integrate` non-destructively merges user-level lifecycle hooks and keeps a
-safety backup of the original configuration. Codex, Claude Code, and Qoder
-integrations can be inspected with `seal integrate status` and removed without
-touching unrelated hooks. Codex Desktop controlled delivery passes the
-deterministic end-to-end suite but remains experimental until a pinned Desktop
-release passes live conformance. Claude Code and Qoder currently provide the
-user-level lifecycle foundation only. Codex requires one native trust review:
-open a new session, run `/hooks`, and approve the exact StateSeal definition.
+`seal integrate` non-destructively adds a user-level MCP server for Codex
+Desktop, keeps a safety backup, and removes only obsolete StateSeal Desktop
+hooks. Existing MCP servers, settings, and unrelated hooks are preserved. No
+`/hooks` command or `StateSeal:` prompt prefix is required. Codex Desktop
+controlled delivery passes the deterministic MCP end-to-end suite but remains
+experimental until a pinned Desktop release passes live conformance. CLI
+adapters continue to use lifecycle hooks for intermediate candidate coverage.
 
 On the first managed run in a repository, StateSeal shows the detected project
 type, exact admission and completion commands, and protected configuration. The
@@ -155,10 +157,10 @@ Admission checks decide whether a candidate is worth preserving. Completion chec
 
 | Command | Purpose |
 | --- | --- |
-| `seal integrate <agent>` | Install a user-level lifecycle integration once per Agent (`codex-desktop`, `claude-code`, or `qoder`) |
+| `seal integrate <agent>` | Install a user-level Agent integration once per computer (`codex-desktop`, `codex-cli`, `claude-code`, or `qoder`) |
 | `seal integrate status` | Show installed integrations and their honest support level |
-| `seal integrate doctor <agent>` | Validate the configured lifecycle boundaries |
-| `seal integrate uninstall <agent>` | Remove only StateSeal-owned user hooks |
+| `seal integrate doctor <agent>` | Validate configuration plus the MCP or lifecycle handshake |
+| `seal integrate uninstall <agent>` | Remove only StateSeal-owned integration entries |
 | `seal desktop status --session …` | Inspect durable Desktop session authority state (normally invoked by the adapter) |
 | `seal desktop recover --session …` | Recover an interrupted Desktop parent turn from durable task evidence |
 | `seal run "…"` | Detect or reuse an Agent, show trustworthy progress, independently verify the development loop, and offer delivery (`--verbose`, `--quiet`, and `--json` supported) |
@@ -215,9 +217,9 @@ existing agent → proposal worktree → candidate
 Authoritative state and the hash-chained event ledger live outside the repository under the platform state directory. Exported `.stateseal/receipts/*.json` files are shareable records, not admission authority.
 
 StateSeal does not ship a separate Desktop application. Existing Agent Desktop
-and IDE products integrate through their native lifecycle configuration; the
-same Go broker, evaluator, checkpoint, and receipt protocol remains
-authoritative. See the [current product map](docs/product-map.md) and
+products integrate through MCP; CLI agents use native lifecycle hooks when
+available. Both surfaces delegate to the same Go broker, evaluator, checkpoint,
+and receipt protocol. See the [current product map](docs/product-map.md) and
 [compatibility evidence](docs/compatibility.md). The product map is also
 available in [Simplified Chinese](docs/product-map.zh-CN.md).
 

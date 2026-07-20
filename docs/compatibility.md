@@ -16,7 +16,7 @@ Support levels are evidence-based:
 | Agent surface | Validated version | Coverage | Level | Notes |
 | --- | --- | --- | --- | --- |
 | Codex CLI | 0.144.5 | `intermediate + terminal` | verified | `PostToolUse` preserved a passing checkpoint; terminal regression recovered under `CP001` |
-| Codex Desktop | Pending | session-bound controlled delegation | experimental | Deterministic full path passes SB027: prompt binding, setup confirmation, direct-tool denial, isolated run, receipt, and explicit apply; pinned live Desktop validation remains |
+| Codex Desktop | Pending | MCP-controlled isolated delivery | experimental | Official stdio MCP handshake, ordinary-prompt routing, policy-bound native enable approval, structured progress, exact receipt apply, and deterministic full delivery pass; pinned live Desktop validation remains |
 | Claude Code CLI / IDE | Pending | contract only | experimental | Non-destructive user/project configuration and static doctor pass; live validation required |
 | Qoder CLI / IDE / JetBrains | Pending | contract only | experimental | Official shared hook configuration, blocking `Stop`, and retry guard are implemented; live validation required |
 | Gemini CLI | Pending | contract only | contract-only | Live validation required |
@@ -43,6 +43,8 @@ seal integrate doctor codex-desktop
 seal integrate doctor qoder
 ```
 
-They validate configuration shape and required lifecycle entries only. Codex
-Desktop additionally has deterministic end-to-end coverage in SealBench SB027,
-but deterministic evidence alone does not promote an integration to `verified`.
+Lifecycle integrations validate configuration shape and required boundaries.
+Codex Desktop doctor additionally launches the configured server, performs MCP
+initialize, lists all required tools, and verifies native approval policy.
+Deterministic end-to-end evidence alone does not promote an integration to
+`verified`.

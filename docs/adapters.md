@@ -31,8 +31,9 @@ user scope       seal integrate <agent>       once per Agent and computer
 project scope    first seal run / seal setup  once per repository
 ```
 
-User scope preserves existing configuration and installs lifecycle entry
-points shared by the Agent's CLI/Desktop or IDE surfaces:
+User scope preserves existing configuration. Desktop surfaces use MCP when the
+host provides a stable MCP client; CLI surfaces use lifecycle entry points for
+intermediate candidate coverage:
 
 ```bash
 seal integrate codex-desktop
@@ -45,19 +46,19 @@ seal integrate uninstall qoder
 ```
 
 Installation alone is not proof of end-to-end compatibility. Codex Desktop now
-has deterministic session-to-project binding, controlled delegation to an
-isolated child Agent, direct-tool denial, explicit apply confirmation, durable
-authority state, and parent-turn recovery. It remains experimental until a
-pinned Desktop release passes a live compatibility run. Claude Code and Qoder
-still require equivalent surface-specific orchestration before promotion.
+uses a local stdio MCP server with explicit tool schemas, routing instructions,
+native approval for project enablement and final apply, durable session state,
+isolated Agent execution, exact receipt binding, and recovery surfaces. It
+remains experimental until a pinned Desktop release passes a live compatibility
+run. Claude Code and Qoder still require equivalent Desktop MCP conformance
+before promotion.
 
-For Codex Desktop, the user begins a task with `StateSeal: <goal>`. The global
-hook records only stable official fields (`session_id`, `turn_id`, `cwd`, and
-`prompt`); it does not parse the unstable transcript format. The Desktop Agent
-coordinates the conversation while `seal desktop run` launches the existing
-goal-driven CLI path in an isolated proposal. `PreToolUse` denies direct tools
-during that managed turn, and the exact admitted checkpoint remains unapplied
-until a later explicit user response authorizes `seal desktop apply`.
+For Codex Desktop, ordinary code-changing prompts are routed through
+`inspect_project` and `start_delivery`; no prefix is required. `enable_project`
+binds the user's native approval to the exact displayed policy digest.
+`apply_verified` accepts only the session-bound admitted receipt. The MCP server
+returns structured progress and evidence, while internal `seal desktop`
+commands remain recovery surfaces rather than user workflow.
 
 Use `seal adapter list` to inspect the built-in matrix and install only the
 agents used by the repository:
@@ -87,6 +88,7 @@ Generated configuration is not treated as proof of runtime compatibility. See
 coverage, and known lifecycle limits.
 
 The mappings follow each product's public extension surface: [Codex
+MCP](https://learn.chatgpt.com/docs/extend/mcp), [Codex
 hooks](https://learn.chatgpt.com/docs/hooks), [Claude Code
 hooks](https://code.claude.com/docs/en/hooks), [Gemini CLI
 hooks](https://geminicli.com/docs/hooks/reference/), [Cursor
