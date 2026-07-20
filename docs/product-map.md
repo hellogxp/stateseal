@@ -1,8 +1,9 @@
 # StateSeal product map
 
 StateSeal turns a coding Agent's candidate into a state-bound, independently
-verified, recoverable, and auditable delivery result. It is neither an Agent
-nor a test framework, and it does not ship a separate Desktop application.
+verified, recoverable, recertifiable, and auditable delivery result—with
+explicit verification coverage and residual risk. It is neither an Agent nor
+a test framework, and it does not ship a separate Desktop application.
 
 ## User experience
 
@@ -48,6 +49,7 @@ flowchart LR
         BROKER["External admission broker"]
         CHECKPOINT["Verified checkpoint ledger"]
         RECEIPT["State-bound receipt"]
+        COVERAGE["Coverage and liveness report"]
     end
 
     subgraph Execution["Controlled execution"]
@@ -63,7 +65,7 @@ flowchart LR
     SESSION --> PROPOSAL --> BROKER
     BROKER --> EVALUATOR --> VERIFIER
     VERIFIER --> BROKER
-    BROKER --> CHECKPOINT --> RECEIPT
+    BROKER --> CHECKPOINT --> RECEIPT --> COVERAGE
 ```
 
 ## Responsibility boundary
@@ -77,6 +79,19 @@ flowchart LR
 | Verifier | Executable evidence for configured checks | Specification completeness |
 | Git | Reproducible trees and delivery transaction | Verifier independence or host trust |
 
+## Verification depth
+
+```text
+L0  StateSeal integrity       exact state · policy · freshness · receipt
+L1  Project engineering      test · build · lint · type · static analysis
+L2  Domain acceptance        business invariants · private acceptance suites
+L3  Protected authority      remote CI · protected runner · deployment · human
+```
+
+Automatic discovery proposes a minimum L1 contract. It does not infer L2/L3
+acceptance and does not claim specification completeness. Receipts record each
+verifier's layer, origin, evidence and status, plus declared uncovered risks.
+
 ## Delivery status
 
 | Capability | Status |
@@ -86,6 +101,7 @@ flowchart LR
 | Isolated proposal and fresh evaluator | Implemented |
 | Admission, checkpoint recovery, completion recertification | Implemented |
 | Hash-chained ledger and state-bound receipt | Implemented |
+| Verification coverage, provenance and delivery-impact reporting | Implemented; product outcome baselines pending |
 | User-level Codex/Claude/Qoder integration management | Implemented; Desktop/IDE level remains experimental |
 | Qoder project adapter | Deterministic contract tests implemented; live validation pending |
 | Codex Desktop managed delivery | MCP initialize/tool handshake and deterministic exact-receipt delivery pass; pinned live Desktop conformance pending |
@@ -93,9 +109,21 @@ flowchart LR
 | StateSeal Desktop application | Explicitly out of scope |
 | Cloud dashboard and multi-Agent orchestration | Deferred |
 
+## Maintained roadmap
+
+| Priority | Outcome | Exit evidence |
+| --- | --- | --- |
+| P0 | Reliable core and honest result model | Go race tests, 34-case SealBench, receipt-schema compatibility |
+| P0 | Portable CLI experience | one goal command, useful progress, one final apply decision, stack fixtures |
+| P1 | Mainstream Agent conformance | pinned live CLI/Desktop evidence with downgrade on capability loss |
+| P1 | L2/L3 verifier integration | domain profiles, protected CI/runner evidence and explicit authority |
+| P1 | Product outcome evaluation | false-reject, abstention, useful-delivery and overhead baselines |
+| Deferred | Separate Desktop App, cloud dashboard, multi-Agent orchestration | reconsider only after core demand and evidence |
+
 ## Trust statement
 
-`ADMITTED` means the exact checkpoint passed the configured checks in a fresh
-local evaluator and still matched the evidence at delivery. It does not prove
-that the checks are complete, the host is uncompromised, or remote CI passed.
-Those residual risks remain explicit in every receipt.
+`ADMITTED` means the exact checkpoint passed the listed checks in a fresh local
+evaluator and still matched the evidence at delivery. It does not prove that
+the checks are complete, the host is uncompromised, or remote CI passed. Those
+coverage limits and residual risks remain explicit in every receipt. See the
+[verification model](verification-model.md) and [research evidence boundary](research-evidence.md).

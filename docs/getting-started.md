@@ -76,6 +76,11 @@ Confirm only when those commands are an appropriate minimum delivery gate. Use
 requires private tests, remote CI, generated-code checks, or domain-specific
 acceptance commands.
 
+Auto-discovered checks are marked `L1 / auto-discovered`. A project can promote
+reviewed checks to `project-policy`, add L2 domain acceptance, or connect L3
+external gates. StateSeal never treats auto-discovery as a complete
+specification.
+
 ## 4. Wait for the delivery result
 
 StateSeal creates an isolated proposal, starts the Agent, independently checks
@@ -93,11 +98,18 @@ Delivery evidence
   ✓ delivered code exactly matches verified state
   ✓ final state recertified in a fresh evaluator
 
+Verification coverage
+  L0 · state, policy, freshness, checkpoint, and receipt integrity
+  L1 · auto-discovered · 2 checks
+  Delivery impact: 2 evaluated, 0 rejected, 2 checkpoints verified
+
 Accept and apply this verified change? [y/N]
 ```
 
 An `ADMITTED` result covers only the checks listed in `seal.yaml`. Host trust,
 specification completeness, and remote CI remain explicit residual risks.
+Use `seal status`, `seal explain`, or `seal run --json` to inspect the same
+coverage, provenance and delivery-impact fields after the interactive run.
 
 ## Codex Desktop path
 

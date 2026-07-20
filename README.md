@@ -1,10 +1,17 @@
 # StateSeal
 
-StateSeal is a local-first, Git-native admission layer for changes produced by coding agents. It lets an agent propose code in an isolated worktree, binds verifier evidence to the exact code state, preserves the last verified checkpoint, and requires fresh completion recertification before a change can be applied.
+StateSeal turns coding-agent candidates into state-bound, independently
+verified, recoverable, recertifiable, and auditable delivery results—with
+explicit verification coverage and residual risk.
 
-It is not another coding agent and it does not replace your tests. It wraps the agent and verification commands you already use.
+It is not another coding agent and it does not replace your tests. It wraps the
+agent and verification commands you already use. Git is one implementation
+mechanism for reproducible state and delivery transactions; it is not the
+entire trust model.
 
 > The model proposes. Evidence informs. The broker decides. Git remembers. The user applies.
+
+StateSeal does not make Agents smarter. It makes their delivery verifiable.
 
 ## Why
 
@@ -94,7 +101,8 @@ is needed. The default view reports real lifecycle events, check results, and
 durations; use `--verbose` for the Agent stream, `--quiet` for the final status
 only, or `--json` for automation. Your branch is unchanged until apply succeeds.
 
-See [Getting started](docs/getting-started.md) for the complete installation,
+See the [documentation index](docs/index.md) or
+[Getting started](docs/getting-started.md) for the complete installation,
 integration, first-project confirmation, delivery, and uninstall flow. A
 [Simplified Chinese guide](docs/getting-started.zh-CN.md) is also available.
 
@@ -128,6 +136,8 @@ admission:
     - id: targeted-tests
       command: ["go", "test", "./internal/payment/..."]
       timeout_seconds: 300
+      layer: L1
+      origin: project-policy
 
 completion:
   timeout_seconds: 900
@@ -135,6 +145,8 @@ completion:
     - id: full-suite
       command: ["go", "test", "./..."]
       timeout_seconds: 900
+      layer: L1
+      origin: project-policy
   recertify_latest_checkpoint: true
   on_missing_evidence: abstain
   on_stale_evidence: reject
@@ -151,7 +163,11 @@ residual_risks:
   - Integration environment was not evaluated.
 ```
 
-Admission checks decide whether a candidate is worth preserving. Completion checks certify the selected checkpoint again in a fresh detached worktree.
+Admission checks decide whether a candidate is worth preserving. Completion
+checks certify the selected checkpoint again in a fresh detached worktree.
+Each check declares a verification layer and provenance, so a receipt can
+distinguish an auto-discovered project test from domain acceptance or an
+external protected gate. See [Verification model](docs/verification-model.md).
 
 ## Commands
 
@@ -198,7 +214,12 @@ Cursor Agent, GitHub Copilot CLI, and OpenCode integrations are thin lifecycle
 adapters; every other terminal agent still works through `seal run -- <agent>`
 with mandatory terminal recertification.
 
-An `ADMITTED` verdict means that the exact checkpoint satisfied the configured policy. It does not prove that the specification or test suite is complete, that every environment is safe, or that the host is uncompromised. Receipts therefore always include residual risks.
+An `ADMITTED` verdict means that the exact checkpoint satisfied the configured
+policy. It does not prove that the specification or test suite is complete,
+that every environment is safe, or that the host is uncompromised. Receipts
+therefore include verification coverage, verifier provenance, delivery impact,
+and residual risks. The [research evidence note](docs/research-evidence.md)
+states which design obligations are supported and which product claims are not.
 
 ## Architecture
 

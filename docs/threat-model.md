@@ -2,6 +2,12 @@
 
 StateSeal separates reliability claims from security claims.
 
+It also separates safety from liveness. Rejecting or abstaining on every
+candidate can prevent an unsafe admission while destroying useful delivery.
+Receipts therefore report candidate rejection, verified checkpoints, recovery,
+coverage and residual risk; a blocked run is not counted as product success by
+default.
+
 ## Covered in v0alpha1
 
 The primary adversary is an honest-but-fallible coding agent. StateSeal is designed to prevent these failures from becoming an admitted result:
@@ -24,6 +30,8 @@ For Node projects, StateSeal may link an existing, Git-ignored `node_modules` di
 - A malicious process with the same OS-user permissions can tamper with local files or broker state.
 - Git worktrees do not isolate the network, processes, credentials, or kernel.
 - A passing test suite does not establish specification completeness.
+- An auto-discovered verifier set is only a minimum L1 engineering gate; it
+  does not establish domain acceptance or protected-environment coverage.
 - Receipt integrity does not establish trusted execution or CI authority.
 - `execution.network: inherit` is descriptive; StateSeal does not claim network isolation.
 
@@ -32,3 +40,8 @@ Run untrusted code in an appropriate sandbox. For protected branches, use a clea
 ## Authority
 
 Only the broker advances `VERIFIED` and issues `ADMITTED`. An agent can create a candidate but cannot supply the decisive verdict. Exported receipts are evidence artifacts. CI must recompute its own verdict and must not infer authority from a receipt included in a pull request.
+
+Learned, heuristic, or LLM-based evaluators may be configured as evidence
+producers. They remain untrusted inputs: the deterministic broker binds their
+identity and output to state, while project policy decides whether that
+evidence is sufficient.

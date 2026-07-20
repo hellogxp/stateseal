@@ -69,6 +69,10 @@ StateSeal · 首次项目配置
 只有当这些命令适合作为项目最低交付门槛时才确认。需要私有测试、远程 CI
 或业务验收命令时，应先检查并调整 `seal.yaml`。
 
+自动发现的检查会标记为 `L1 / auto-discovered`，只代表最低工程门槛，不代表
+完整需求。项目可以将人工确认的检查标记为 `project-policy`，补充 L2 业务验收，
+或接入 L3 远程 CI / 受保护 Runner。
+
 ## 4. 等待验收结果
 
 StateSeal 自动创建隔离候选区、启动 Agent、独立复验候选、保存可信
@@ -85,11 +89,17 @@ StateSeal · 验收结果
   ✓ 交付代码与被验证状态完全一致
   ✓ 结束前已在全新 Evaluator 中复验
 
+验证覆盖
+  L0 · 状态、策略、新鲜度、Checkpoint 与 Receipt 完整性
+  L1 · auto-discovered · 2 项检查
+  交付影响：评估 2 个候选，拒绝 0 个，验证 2 个 Checkpoint
+
 是否接受并应用这份已验证的代码？[y/N]
 ```
 
 `ADMITTED` 只表示确切代码状态通过了 `seal.yaml` 中配置的检查，不代表测试
-覆盖完整、主机可信或远程 CI 已经通过；这些风险会继续显示在 receipt 中。
+覆盖完整、主机可信或远程 CI 已经通过；Verifier 层级、来源、未覆盖项、候选
+拒绝和恢复情况都会继续显示在 Receipt 中。
 
 ## Codex Desktop 使用路径
 
