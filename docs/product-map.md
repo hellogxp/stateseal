@@ -21,9 +21,11 @@ flowchart TD
     J --> K["User accepts and applies verified code"]
 ```
 
-The current authoritative path starts the controlled task with `seal run`.
-User-level Desktop/IDE integration is available as an experimental lifecycle
-foundation; it is not yet represented as fully supported managed delivery.
+The portable authoritative path starts the controlled task with `seal run`.
+Codex Desktop now delegates `StateSeal: <goal>` into that same authoritative
+path while retaining confirmation in the original conversation. It remains
+experimental until pinned live Desktop conformance. Other Desktop/IDE adapters
+currently provide the lifecycle foundation only.
 
 ## Product architecture
 
@@ -83,7 +85,7 @@ flowchart LR
 | Hash-chained ledger and state-bound receipt | Implemented |
 | User-level Codex/Claude/Qoder integration management | Implemented; Desktop/IDE level remains experimental |
 | Qoder project adapter | Deterministic contract tests implemented; live validation pending |
-| Codex Desktop managed delivery | In progress: session/workspace binding and live conformance remain |
+| Codex Desktop managed delivery | Deterministic end-to-end path implemented; pinned live Desktop conformance pending |
 | Claude Code, Qoder, Cursor live compatibility | Pending pinned-version validation |
 | StateSeal Desktop application | Explicitly out of scope |
 | Cloud dashboard and multi-Agent orchestration | Deferred |

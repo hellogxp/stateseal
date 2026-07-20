@@ -44,10 +44,20 @@ seal integrate doctor qoder
 seal integrate uninstall qoder
 ```
 
-Installation alone is not proof of end-to-end compatibility. The current
-Desktop integrations are marked experimental until session-to-project binding,
-isolated workspace routing, failure recovery, and a live compatibility run all
-pass. Until then, `seal run` remains the authoritative managed path.
+Installation alone is not proof of end-to-end compatibility. Codex Desktop now
+has deterministic session-to-project binding, controlled delegation to an
+isolated child Agent, direct-tool denial, explicit apply confirmation, durable
+authority state, and parent-turn recovery. It remains experimental until a
+pinned Desktop release passes a live compatibility run. Claude Code and Qoder
+still require equivalent surface-specific orchestration before promotion.
+
+For Codex Desktop, the user begins a task with `StateSeal: <goal>`. The global
+hook records only stable official fields (`session_id`, `turn_id`, `cwd`, and
+`prompt`); it does not parse the unstable transcript format. The Desktop Agent
+coordinates the conversation while `seal desktop run` launches the existing
+goal-driven CLI path in an isolated proposal. `PreToolUse` denies direct tools
+during that managed turn, and the exact admitted checkpoint remains unapplied
+until a later explicit user response authorizes `seal desktop apply`.
 
 Use `seal adapter list` to inspect the built-in matrix and install only the
 agents used by the repository:

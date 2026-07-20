@@ -32,8 +32,9 @@ The v0alpha1 case catalog is:
 | SB024 | Sandboxed Agent build cache | managed caches are writable and remain outside candidate identity |
 | SB025 | Repeated rejected state | loop escalates instead of consuming its full wall budget |
 | SB026 | User integration mutation | install/uninstall preserves unrelated Agent configuration |
+| SB027 | Codex Desktop controlled delivery | session-bound work remains isolated until explicit acceptance |
 
-`run.sh` executes all 26 cases with exact verdict, state, evidence, freshness,
+`run.sh` executes all 27 cases with exact verdict, state, evidence, freshness,
 process-lifecycle, cross-agent adapter, mode, cache-isolation, configuration
 mutation, and recovery assertions. `stacks.sh` adds managed Go, Python, and Node
 compatibility fixtures, including Node dependency resolution from an ignored

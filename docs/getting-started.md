@@ -28,9 +28,16 @@ seal integrate codex-desktop
 # or: seal integrate qoder
 ```
 
-StateSeal merges its `PostToolUse` and `Stop` entries into the Agent's existing
-user configuration, writes a one-time safety backup, and performs a static
-conformance check. It does not replace unrelated hooks.
+StateSeal merges lifecycle entries into the Agent's existing user
+configuration, writes a one-time safety backup, and performs a static
+conformance check. It does not replace unrelated hooks. Codex Desktop uses
+`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop` to
+bind the conversation, prevent direct source-worktree editing during a managed
+turn, and return the delivery decision to the same conversation.
+
+Codex requires a native trust review for non-managed command hooks. Open a new
+Codex session, run `/hooks`, inspect the exact StateSeal definition, and trust
+it once. StateSeal does not bypass this review for ordinary Desktop use.
 
 Inspect or undo the integration at any time:
 
@@ -40,10 +47,11 @@ seal integrate doctor codex-desktop
 seal integrate uninstall codex-desktop
 ```
 
-Desktop and IDE integrations are currently experimental. Installation proves
-that the lifecycle configuration is structurally present; it does not prove a
-live Agent version or a complete managed Desktop delivery. Use `seal run` for
-the authoritative workflow.
+Codex Desktop controlled delivery passes deterministic end-to-end tests but is
+still experimental until a pinned Desktop build passes live conformance.
+Claude Code and Qoder installation currently proves the lifecycle foundation,
+not a complete managed Desktop delivery. `seal run` remains the portable,
+live-validated workflow.
 
 ## 3. Start the first task in a project
 
@@ -96,3 +104,25 @@ Accept and apply this verified change? [y/N]
 
 An `ADMITTED` result covers only the checks listed in `seal.yaml`. Host trust,
 specification completeness, and remote CI remain explicit residual risks.
+
+## Codex Desktop path
+
+After `seal integrate codex-desktop`, open the Git repository in Codex Desktop
+and use the explicit marker once per managed task:
+
+```text
+StateSeal: Add input validation, preserve compatibility, and include tests
+```
+
+StateSeal binds the Codex `session_id`, repository, goal, and generated task id
+in authority state outside the repository. On the first project task, Codex
+shows the detected admission and completion commands and asks for confirmation.
+After confirmation, the parent Desktop turn can invoke only the exact StateSeal
+delegation command; direct editing tools are denied. The isolated child Agent
+runs the same workflow as `seal run --no-apply --json`.
+
+When verification succeeds, the Desktop conversation reports the receipt and
+residual risks and asks whether to apply. A plain `yes` applies the exact
+checkpoint to a feature branch; `no` leaves the user branch unchanged. Internal
+`seal desktop` commands are adapter-facing recovery surfaces and normally do
+not need to be typed by the user.

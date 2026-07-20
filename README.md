@@ -60,12 +60,25 @@ cd your-project
 seal run "修复重复回调导致的重复扣款，并保持现有接口兼容"
 ```
 
+Or stay inside Codex Desktop after the one-time integration, open the Git
+project, and submit an explicitly managed goal:
+
+```text
+StateSeal: 修复重复回调导致的重复扣款，并保持现有接口兼容
+```
+
+The Desktop conversation presents the first-project verification contract,
+delegates implementation to an isolated StateSeal-managed Codex process, shows
+the verified result, and waits for explicit acceptance before applying it.
+
 `seal integrate` non-destructively merges user-level lifecycle hooks and keeps a
 safety backup of the original configuration. Codex, Claude Code, and Qoder
 integrations can be inspected with `seal integrate status` and removed without
-touching unrelated hooks. User-level Desktop integration is currently
-experimental; the authoritative delivery path is still the managed `seal run`
-process.
+touching unrelated hooks. Codex Desktop controlled delivery passes the
+deterministic end-to-end suite but remains experimental until a pinned Desktop
+release passes live conformance. Claude Code and Qoder currently provide the
+user-level lifecycle foundation only. Codex requires one native trust review:
+open a new session, run `/hooks`, and approve the exact StateSeal definition.
 
 On the first managed run in a repository, StateSeal shows the detected project
 type, exact admission and completion commands, and protected configuration. The
@@ -146,6 +159,8 @@ Admission checks decide whether a candidate is worth preserving. Completion chec
 | `seal integrate status` | Show installed integrations and their honest support level |
 | `seal integrate doctor <agent>` | Validate the configured lifecycle boundaries |
 | `seal integrate uninstall <agent>` | Remove only StateSeal-owned user hooks |
+| `seal desktop status --session …` | Inspect durable Desktop session authority state (normally invoked by the adapter) |
+| `seal desktop recover --session …` | Recover an interrupted Desktop parent turn from durable task evidence |
 | `seal run "…"` | Detect or reuse an Agent, show trustworthy progress, independently verify the development loop, and offer delivery (`--verbose`, `--quiet`, and `--json` supported) |
 | `seal setup --agent …` | Explicitly configure a repository Agent integration |
 | `seal init` | Legacy policy-only initialization |

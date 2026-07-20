@@ -41,6 +41,11 @@ the version fields in its JSON schemas.
   including the blocking Stop exit code and retry-loop guard.
 - A first-project confirmation view that shows the exact admission and
   completion commands before creating auditable project configuration.
+- Codex Desktop controlled delegation using official session, prompt, tool, and
+  stop hooks; goals remain isolated, direct parent-session edits are denied,
+  and verified checkpoints require explicit conversational acceptance.
+- Durable Desktop session authority state, per-repository concurrency control,
+  parent-turn recovery, and deterministic end-to-end coverage in SealBench.
 
 ### Security
 

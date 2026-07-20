@@ -27,8 +27,10 @@ seal integrate codex-desktop
 # 或：seal integrate qoder
 ```
 
-StateSeal 会合并用户级 `PostToolUse` 和 `Stop` Hook，保留已有配置，
-同时创建一次安全备份。可以随时检查或撤销：
+StateSeal 会合并用户级生命周期 Hook，保留已有配置，同时创建一次安全备份。
+Codex Desktop 使用 `SessionStart`、`UserPromptSubmit`、`PreToolUse`、
+`PostToolUse` 和 `Stop` 来绑定会话、阻止受控任务绕过隔离候选区，并把验收
+结果返回原对话。可以随时检查或撤销：
 
 ```bash
 seal integrate status
@@ -36,9 +38,14 @@ seal integrate doctor codex-desktop
 seal integrate uninstall codex-desktop
 ```
 
-当前 Desktop/IDE 集成属于 experimental：安装成功仅证明生命周期配置结构
-正确，不代表该 Agent 版本已经通过完整实机验证。现阶段权威交付路径仍是
-`seal run`。
+Codex 对非托管命令 Hook 要求原生信任检查。新建一个 Codex 会话，执行
+`/hooks`，检查 StateSeal 的精确定义并信任一次。StateSeal 在普通 Desktop
+使用中不会绕过这一步。
+
+Codex Desktop 受控交付已通过确定性端到端测试，但在固定 Desktop 版本完成
+实机 conformance 前仍标记为 experimental。Claude Code 与 Qoder 当前完成的
+是用户级生命周期基础，不代表完整 Desktop 闭环。`seal run` 仍是已经完成
+实机验证的通用入口。
 
 ## 3. 在项目中启动任务
 
@@ -87,3 +94,22 @@ StateSeal · 验收结果
 
 `ADMITTED` 只表示确切代码状态通过了 `seal.yaml` 中配置的检查，不代表测试
 覆盖完整、主机可信或远程 CI 已经通过；这些风险会继续显示在 receipt 中。
+
+## Codex Desktop 使用路径
+
+执行一次 `seal integrate codex-desktop` 后，在 Codex Desktop 中打开 Git 项目，
+每个受控任务只需输入：
+
+```text
+StateSeal: 增加输入校验，保持兼容，并补充完整测试
+```
+
+StateSeal 会在仓库外绑定 Codex `session_id`、项目、目标和任务 ID。项目首次
+使用时，原对话先展示自动识别的 Admission 与 Completion 命令，请用户确认
+一次。确认后，Desktop 父会话只负责调用精确的 StateSeal 委托命令；直接编辑
+工具会被拒绝。真正编码在隔离候选区内由受控 Codex 子进程完成。
+
+验证通过后，原 Desktop 对话展示 receipt、检查结果和剩余风险，再询问是否
+应用。输入明确的“确认”或“yes”才会把确切 checkpoint 应用到 feature 分支；
+输入“拒绝”或“no”则保持用户分支不变。内部 `seal desktop` 命令主要供 adapter
+和异常恢复使用，普通用户无需手动输入。

@@ -21,8 +21,10 @@ flowchart TD
     J --> K["用户确认并应用已验证代码"]
 ```
 
-当前权威路径由 `seal run` 启动。用户级 Desktop/IDE 生命周期集成已经具备
-安装、检查和卸载能力，但完整 Desktop 受控交付仍标记为 experimental。
+通用权威路径仍由 `seal run` 启动。Codex Desktop 现在可以把
+`StateSeal: <目标>` 委托给同一条权威路径，同时在原对话中完成首次合同确认和
+最终应用确认；在固定 Desktop 版本完成实机 conformance 前仍标记为
+experimental。其他 Desktop/IDE adapter 当前只完成生命周期基础。
 
 ## 技术架构
 
@@ -70,7 +72,7 @@ flowchart LR
 | Hash-chain ledger 与 state-bound receipt | 已实现 |
 | Codex、Claude、Qoder 用户级集成管理 | 已实现；Desktop/IDE 仍为 experimental |
 | Qoder 项目 adapter | 已通过确定性合同测试；等待实机验证 |
-| Codex Desktop 完整受控交付 | 进行中：仍需会话/工作区绑定和实机 conformance |
+| Codex Desktop 完整受控交付 | 确定性端到端链路已实现；等待固定 Desktop 版本实机 conformance |
 | Claude、Qoder、Cursor 实机兼容矩阵 | 待完成 |
 | StateSeal Desktop App | 明确不做 |
 | 云 Dashboard、多 Agent 编排 | 暂缓 |
