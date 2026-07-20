@@ -57,11 +57,7 @@ func installNestedHooks(path, binary, agent string, force bool, specs []nestedHo
 }
 
 func installUserNestedHooks(path, binary, agent string, force bool, specs []nestedHookSpec) error {
-	subcommand := "hook"
-	if agent == "codex" {
-		subcommand = "desktop-hook"
-	}
-	return installNestedHooksForCommand(path, binary, agent, subcommand, force, specs)
+	return installNestedHooksForCommand(path, binary, agent, "hook", force, specs)
 }
 
 func installNestedHooksForCommand(path, binary, agent, subcommand string, force bool, specs []nestedHookSpec) error {

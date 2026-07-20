@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +25,16 @@ type progressSnapshot struct {
 	CompletedAt time.Time
 }
 
+type machineProgressEvent struct {
+	Sequence  int       `json:"sequence"`
+	Phase     string    `json:"phase"`
+	Message   string    `json:"message"`
+	Attempts  int       `json:"attempts,omitempty"`
+	Changed   int       `json:"changed_files,omitempty"`
+	ElapsedMS int64     `json:"elapsed_ms"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
 type runProgress struct {
 	mu          sync.Mutex
 	w           io.Writer
@@ -34,26 +46,36 @@ type runProgress struct {
 	attempts    int
 	changed     int
 	checks      int
+	sequence    int
+	eventPath   string
 	stop        chan struct{}
 	done        chan struct{}
 }
 
 func newRunProgress(w io.Writer, locale i18n.Locale, enabled, heartbeat bool) *runProgress {
-	return &runProgress{w: w, locale: locale, enabled: enabled, heartbeat: heartbeat, startedAt: time.Now()}
+	return &runProgress{
+		w: w, locale: locale, enabled: enabled, heartbeat: heartbeat,
+		startedAt: time.Now(), eventPath: os.Getenv("STATESEAL_PROGRESS_FILE"),
+	}
 }
 
 func (p *runProgress) Header(goal, agent string, policy config.Policy) {
-	if !p.enabled {
+	if !p.active() {
 		return
 	}
-	fmt.Fprintf(p.w, "%s\n\n%s\n  %s\n\n%s\n", p.locale.T(i18n.ManagedTitle), p.locale.T(i18n.GoalLabel), goal, p.locale.T(i18n.PlanTitle))
-	p.field(p.locale.T(i18n.AgentLabel), agent)
-	p.field(p.locale.T(i18n.PermissionsLabel), p.locale.T(i18n.PermissionsValue))
-	p.field(p.locale.T(i18n.IsolationLabel), p.locale.T(i18n.IsolationValue))
-	p.field(p.locale.T(i18n.AdmissionLabel), checkSetSummary(policy.Admission.Checks))
-	p.field(p.locale.T(i18n.CompletionLabel), checkSetSummary(policy.Completion.Checks))
-	p.field(p.locale.T(i18n.AttemptsLabel), fmt.Sprint(policy.Budget.MaxCandidates))
-	fmt.Fprintln(p.w, "────────────────────────────────────────")
+	p.mu.Lock()
+	p.publishLocked("plan", fmt.Sprintf("%s · Admission: %s · Completion: %s", goal, checkSetSummary(policy.Admission.Checks), checkSetSummary(policy.Completion.Checks)))
+	if p.enabled {
+		fmt.Fprintf(p.w, "%s\n\n%s\n  %s\n\n%s\n", p.locale.T(i18n.ManagedTitle), p.locale.T(i18n.GoalLabel), goal, p.locale.T(i18n.PlanTitle))
+		p.field(p.locale.T(i18n.AgentLabel), agent)
+		p.field(p.locale.T(i18n.PermissionsLabel), p.locale.T(i18n.PermissionsValue))
+		p.field(p.locale.T(i18n.IsolationLabel), p.locale.T(i18n.IsolationValue))
+		p.field(p.locale.T(i18n.AdmissionLabel), checkSetSummary(policy.Admission.Checks))
+		p.field(p.locale.T(i18n.CompletionLabel), checkSetSummary(policy.Completion.Checks))
+		p.field(p.locale.T(i18n.AttemptsLabel), fmt.Sprint(policy.Budget.MaxCandidates))
+		fmt.Fprintln(p.w, "────────────────────────────────────────")
+	}
+	p.mu.Unlock()
 }
 
 func (p *runProgress) field(label, value string) {
@@ -64,12 +86,16 @@ func (p *runProgress) field(label, value string) {
 	fmt.Fprintf(p.w, "  %s%s %s\n", label, separator, value)
 }
 
-func (p *runProgress) WorkspaceReady() { p.step("✓", p.locale.T(i18n.WorkspaceReady)) }
-func (p *runProgress) ProposalReady()  { p.step("✓", p.locale.T(i18n.ProposalReady)) }
+func (p *runProgress) WorkspaceReady() {
+	p.step("workspace_ready", "✓", p.locale.T(i18n.WorkspaceReady))
+}
+func (p *runProgress) ProposalReady() {
+	p.step("proposal_ready", "✓", p.locale.T(i18n.ProposalReady))
+}
 
 func (p *runProgress) AgentStarted(agent, proposal, base string) {
-	p.step("●", p.locale.T(i18n.AgentStarted, agent))
-	if !p.enabled || !p.heartbeat {
+	p.step("agent_started", "●", p.locale.T(i18n.AgentStarted, agent))
+	if !p.active() || !p.heartbeat && p.eventPath == "" {
 		return
 	}
 	p.mu.Lock()
@@ -88,7 +114,7 @@ func (p *runProgress) AgentStarted(agent, proposal, base string) {
 				changed := changedFileCount(proposal, base)
 				p.mu.Lock()
 				p.changed = changed
-				p.writeLocked("●", p.locale.T(i18n.AgentHeartbeat, agent, changed))
+				p.writeLocked("agent_working", "●", p.locale.T(i18n.AgentHeartbeat, agent, changed))
 				p.mu.Unlock()
 			}
 		}
@@ -110,26 +136,26 @@ func (p *runProgress) Candidate(number, changed int, admission, completion []con
 	p.mu.Lock()
 	p.attempts = number
 	p.changed = changed
-	p.writeLocked("◆", p.locale.T(i18n.CandidateReceived, number, changed))
-	p.writeLocked("⟳", p.locale.T(i18n.AdmissionRunning, checkSetSummary(admission), checkSetSummary(completion)))
+	p.writeLocked("candidate_received", "◆", p.locale.T(i18n.CandidateReceived, number, changed))
+	p.writeLocked("candidate_verifying", "⟳", p.locale.T(i18n.AdmissionRunning, checkSetSummary(admission), checkSetSummary(completion)))
 	p.mu.Unlock()
 }
 
 func (p *runProgress) CandidateResult(receipt protocol.CompletionReceipt, checks []config.Check, evidence []protocol.EvidenceEnvelope, elapsed time.Duration, agent string) {
-	if !p.enabled {
+	if !p.active() {
 		return
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if receipt.Verdict == protocol.VerdictAdmitted {
-		p.writeLocked("✓", p.locale.T(i18n.AdmissionPassed, formatDuration(elapsed)))
+		p.writeLocked("candidate_admitted", "✓", p.locale.T(i18n.AdmissionPassed, formatDuration(elapsed)))
 		p.writeEvidenceLocked(receipt, checks, evidence)
-		p.writeLocked("✓", p.locale.T(i18n.CheckpointSaved))
+		p.writeLocked("checkpoint_saved", "✓", p.locale.T(i18n.CheckpointSaved))
 		return
 	}
-	p.writeLocked("✗", p.locale.T(i18n.AdmissionFailed, compactFailure(receipt.Reason)))
+	p.writeLocked("candidate_rejected", "✗", p.locale.T(i18n.AdmissionFailed, compactFailure(receipt.Reason)))
 	if receipt.Verdict == protocol.VerdictRejected || receipt.Verdict == protocol.VerdictAbstained {
-		p.writeLocked("↩", p.locale.T(i18n.FeedbackSent, agent))
+		p.writeLocked("feedback_sent", "↩", p.locale.T(i18n.FeedbackSent, agent))
 	}
 }
 
@@ -140,23 +166,23 @@ func (p *runProgress) FinalStarted(checks []config.Check, changed int) {
 	}
 	p.changed = changed
 	p.mu.Unlock()
-	p.step("⟳", p.locale.T(i18n.FinalRunning, checkSetSummary(checks)))
+	p.step("final_verifying", "⟳", p.locale.T(i18n.FinalRunning, checkSetSummary(checks)))
 }
 
 func (p *runProgress) FinalResult(receipt protocol.CompletionReceipt, checks []config.Check, evidence []protocol.EvidenceEnvelope, elapsed time.Duration) {
-	if !p.enabled {
+	if !p.active() {
 		return
 	}
 	p.mu.Lock()
 	if receipt.Verdict != protocol.VerdictAdmitted {
-		p.writeLocked("✗", p.locale.T(i18n.FinalFailed, compactFailure(receipt.Reason)))
+		p.writeLocked("final_rejected", "✗", p.locale.T(i18n.FinalFailed, compactFailure(receipt.Reason)))
 		p.mu.Unlock()
 		return
 	}
 	p.checks = len(receipt.CompletionEvidence)
-	p.writeLocked("✓", p.locale.T(i18n.FinalPassed, formatDuration(elapsed)))
+	p.writeLocked("final_admitted", "✓", p.locale.T(i18n.FinalPassed, formatDuration(elapsed)))
 	p.writeEvidenceLocked(receipt, checks, evidence)
-	p.writeLocked("✓", p.locale.T(i18n.StateBound))
+	p.writeLocked("state_bound", "✓", p.locale.T(i18n.StateBound))
 	p.mu.Unlock()
 }
 
@@ -180,23 +206,47 @@ func (p *runProgress) Snapshot() progressSnapshot {
 	return progressSnapshot{Attempts: p.attempts, Changed: p.changed, Checks: p.checks, StartedAt: p.startedAt, CompletedAt: completed}
 }
 
-func (p *runProgress) step(symbol, message string) {
-	if !p.enabled {
+func (p *runProgress) active() bool { return p.enabled || p.eventPath != "" }
+
+func (p *runProgress) step(phase, symbol, message string) {
+	if !p.active() {
 		return
 	}
 	p.mu.Lock()
-	p.writeLocked(symbol, message)
+	p.writeLocked(phase, symbol, message)
 	p.mu.Unlock()
 }
 
-func (p *runProgress) writeLocked(symbol, message string) {
-	if !p.enabled {
+func (p *runProgress) writeLocked(phase, symbol, message string) {
+	p.publishLocked(phase, message)
+	if p.enabled {
+		fmt.Fprintf(p.w, "[%s] %s %s\n", formatElapsed(time.Since(p.startedAt)), symbol, message)
+	}
+}
+
+func (p *runProgress) publishLocked(phase, message string) {
+	if p.eventPath == "" {
 		return
 	}
-	fmt.Fprintf(p.w, "[%s] %s %s\n", formatElapsed(time.Since(p.startedAt)), symbol, message)
+	p.sequence++
+	event := machineProgressEvent{
+		Sequence: p.sequence, Phase: phase, Message: message, Attempts: p.attempts,
+		Changed: p.changed, ElapsedMS: time.Since(p.startedAt).Milliseconds(), Timestamp: time.Now().UTC(),
+	}
+	raw, err := json.Marshal(event)
+	if err != nil {
+		return
+	}
+	if f, err := os.OpenFile(p.eventPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
+		_, _ = f.Write(append(raw, '\n'))
+		_ = f.Close()
+	}
 }
 
 func (p *runProgress) writeEvidenceLocked(receipt protocol.CompletionReceipt, checks []config.Check, evidence []protocol.EvidenceEnvelope) {
+	if !p.enabled {
+		return
+	}
 	byID := make(map[string]protocol.EvidenceEnvelope, len(evidence))
 	for _, item := range evidence {
 		byID[item.EvidenceID] = item

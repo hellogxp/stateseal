@@ -18,8 +18,12 @@ type Store struct{ Dir string }
 // ProjectSettings are local user preferences. They live outside the repository
 // so a coding Agent cannot silently change which integration StateSeal trusts.
 type ProjectSettings struct {
-	Agent                 string `json:"agent,omitempty"`
-	TrustedHookAutomation bool   `json:"trusted_hook_automation,omitempty"`
+	Agent                 string   `json:"agent,omitempty"`
+	TrustedHookAutomation bool     `json:"trusted_hook_automation,omitempty"`
+	DesktopEnabled        bool     `json:"desktop_enabled,omitempty"`
+	DesktopPolicyDigest   string   `json:"desktop_policy_digest,omitempty"`
+	DesktopSurface        string   `json:"desktop_surface,omitempty"`
+	DesktopAgents         []string `json:"desktop_agents,omitempty"`
 }
 
 func Open(repoRoot, taskID string) (*Store, error) {

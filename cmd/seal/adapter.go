@@ -67,11 +67,6 @@ func agentAdapterCmd(agent string) *cobra.Command {
 		return runAgentHook(agent, c, args)
 	}}
 	cmd.AddCommand(install, hook)
-	if agent == "codex" {
-		cmd.AddCommand(&cobra.Command{Use: "desktop-hook [event]", Args: cobra.MaximumNArgs(1), Short: "Process a Codex Desktop coordination event", Hidden: true, RunE: func(c *cobra.Command, args []string) error {
-			return runCodexDesktopCommandHook(c, args)
-		}})
-	}
 	return cmd
 }
 

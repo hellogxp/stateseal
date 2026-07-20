@@ -56,7 +56,7 @@ func newRoot() *cobra.Command {
 	cmd := &cobra.Command{Use: "seal", Short: "Transactional admission for coding-agent changes", SilenceUsage: true, SilenceErrors: true}
 	cmd.Version = info.Version
 	cmd.SetVersionTemplate("seal {{.Version}}\n")
-	cmd.AddCommand(versionCmd(), integrateCmd(), desktopCmd(), setupCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd())
+	cmd.AddCommand(versionCmd(), integrateCmd(), mcpCmd(), desktopCmd(), setupCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd())
 	return cmd
 }
 
@@ -183,6 +183,7 @@ func runCmd() *cobra.Command {
 			return codedError{10, err}
 		}
 		var agentArgs []string
+		desktopMCPChild := os.Getenv("STATESEAL_DESKTOP_MCP_CHILD") == "1"
 		if !legacy {
 			if strings.TrimSpace(goal) == "" {
 				return codedError{10, fmt.Errorf("%s", locale.T(i18n.GoalRequired))}
@@ -209,15 +210,22 @@ func runCmd() *cobra.Command {
 			if err := identity.CheckpointIdentity(root); err != nil {
 				return codedError{10, err}
 			}
-			if err := ensureManagedSetup(cmd, root, agentName, locale, yes, quiet || jsonOut); err != nil {
-				return codedError{10, err}
-			}
-			if err := adapterHandshake(root, agentName); err != nil {
-				return codedError{10, fmt.Errorf("Agent integration handshake failed: %w", err)}
-			}
-			trustedHooks, err := authorizeTrustedHooks(cmd, root, agentName, locale, yes, jsonOut)
-			if err != nil {
-				return codedError{10, err}
+			trustedHooks := false
+			if desktopMCPChild {
+				if err := ensureDesktopMCPSetup(root, agentName); err != nil {
+					return codedError{10, err}
+				}
+			} else {
+				if err := ensureManagedSetup(cmd, root, agentName, locale, yes, quiet || jsonOut); err != nil {
+					return codedError{10, err}
+				}
+				if err := adapterHandshake(root, agentName); err != nil {
+					return codedError{10, fmt.Errorf("Agent integration handshake failed: %w", err)}
+				}
+				trustedHooks, err = authorizeTrustedHooks(cmd, root, agentName, locale, yes, jsonOut)
+				if err != nil {
+					return codedError{10, err}
+				}
 			}
 			agentArgs, err = agentLaunch(agentName, goal, autonomous, trustedHooks)
 			if err != nil {

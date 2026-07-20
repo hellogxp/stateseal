@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/hellogxp/stateseal/pkg/protocol"
@@ -33,7 +34,10 @@ func TestLedgerRejectsTampering(t *testing.T) {
 
 func TestProjectSettingsRoundTrip(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	want := ProjectSettings{Agent: "codex", TrustedHookAutomation: true}
+	want := ProjectSettings{
+		Agent: "codex", TrustedHookAutomation: true, DesktopEnabled: true,
+		DesktopPolicyDigest: "policy-digest", DesktopSurface: "mcp", DesktopAgents: []string{"codex", "qoder"},
+	}
 	if err := SaveProjectSettings("/repo/project", want); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +45,7 @@ func TestProjectSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("project settings mismatch: got %+v want %+v", got, want)
 	}
 }

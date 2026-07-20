@@ -173,7 +173,7 @@ func TestUserIntegrationPreservesAndRemovesOnlyOwnedHooks(t *testing.T) {
 
 func TestIntegrationAliasesAndStaticDoctor(t *testing.T) {
 	for alias, want := range map[string]string{
-		"codex-desktop": "codex",
+		"codex-desktop": "codex-desktop",
 		"claude-code":   "claude",
 		"qoder-ide":     "qoder",
 	} {

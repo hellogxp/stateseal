@@ -87,13 +87,7 @@ type projectSetupResult struct {
 func configureProject(root, agent, binary string, force bool) (projectSetupResult, error) {
 	result := projectSetupResult{PolicyPath: filepath.Join(root, "seal.yaml")}
 	if _, statErr := os.Stat(result.PolicyPath); os.IsNotExist(statErr) {
-		plan := discoverVerificationPlan(root)
-		result.Detected = strings.Join(plan.Detected, ", ")
-		result.Policy = config.Default(identity.NormalizeTaskID(filepath.Base(root)), plan.Admission)
-		result.Policy.Completion.Checks = plan.Completion
-		for _, gap := range plan.Uncovered {
-			result.Policy.ResidualRisks = append(result.Policy.ResidualRisks, gap+".")
-		}
+		result.Policy, result.Detected = discoveredProjectPolicy(root)
 		result.Policy.Task.Goal = "Runtime goals are supplied by seal run."
 		if err := config.Write(result.PolicyPath, result.Policy); err != nil {
 			return result, err
@@ -199,10 +193,52 @@ func projectPolicyPreview(root string, missing bool) (config.Policy, error) {
 		policy, _, err := config.Load(root)
 		return policy, err
 	}
+	policy, _ := discoveredProjectPolicy(root)
+	return policy, nil
+}
+
+func discoveredProjectPolicy(root string) (config.Policy, string) {
 	plan := discoverVerificationPlan(root)
 	policy := config.Default(identity.NormalizeTaskID(filepath.Base(root)), plan.Admission)
 	policy.Completion.Checks = plan.Completion
-	return policy, nil
+	for _, gap := range plan.Uncovered {
+		policy.ResidualRisks = append(policy.ResidualRisks, gap+".")
+	}
+	return policy, strings.Join(plan.Detected, ", ")
+}
+
+func ensureDesktopMCPSetup(root, agent string) error {
+	if _, _, err := config.Load(root); err != nil {
+		return fmt.Errorf("StateSeal project policy is not enabled: %w", err)
+	}
+	settings, err := store.LoadProjectSettings(root)
+	if err != nil {
+		return fmt.Errorf("StateSeal Desktop project is not enabled: %w", err)
+	}
+	if !settings.DesktopEnabled || settings.DesktopSurface != "mcp" {
+		return fmt.Errorf("StateSeal Desktop project is not enabled; approve enable_project first")
+	}
+	if !desktopAgentEnabled(settings, agent) {
+		return fmt.Errorf("StateSeal Desktop is not enabled for %s in this project", agentDisplayName(agent))
+	}
+	if settings.DesktopPolicyDigest == "" || settings.DesktopPolicyDigest != rawPolicyDigest(root) {
+		return fmt.Errorf("seal.yaml changed after Desktop enablement; review and enable the project again")
+	}
+	return nil
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func desktopAgentEnabled(settings store.ProjectSettings, agent string) bool {
+	return containsString(settings.DesktopAgents, agent) ||
+		(len(settings.DesktopAgents) == 0 && settings.Agent == agent)
 }
 
 func printProjectSetupPreview(w io.Writer, root, agent string, policy config.Policy, locale i18n.Locale) {
