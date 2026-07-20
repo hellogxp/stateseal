@@ -4,6 +4,9 @@ StateSeal is agent-agnostic. The command adapter works with any coding agent
 that can be launched from a terminal:
 
 ```bash
+seal run "Implement the requested change"
+
+# Advanced compatibility mode:
 seal run -- codex exec "Implement the requested change"
 seal run -- claude -p "Implement the requested change"
 seal run -- gemini -p "Implement the requested change"
@@ -53,8 +56,11 @@ hooks](https://cursor.com/docs/hooks), [GitHub Copilot
 hooks](https://docs.github.com/en/copilot/reference/hooks-reference), and
 [OpenCode plugins](https://opencode.ai/docs/plugins/).
 
-Commit generated adapter files as protected infrastructure. Review or trust
-them through the agent's native UI when that product requires it. `--force`
+Commit generated adapter files as protected infrastructure. The goal-driven
+workflow does this during its confirmed first-run setup. Codex requires trust
+for project hooks; StateSeal records explicit user authorization outside the
+repository and enables only the generated, marker-checked hook during managed
+automation. It does not bypass the Agent sandbox. `--force`
 replaces StateSeal-owned entries while preserving unrelated configuration;
 the Copilot and OpenCode integrations use dedicated StateSeal-owned files.
 

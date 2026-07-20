@@ -55,22 +55,19 @@ make experience
 Then use StateSeal in your own repository:
 
 ```bash
-
 cd your-project
-seal init --goal "Repeated callbacks must create exactly one charge."
-# Review seal.yaml before enforcing it.
-seal adapter list
-# Install the adapter for the agent you use, for example:
-seal adapter claude install
-git add seal.yaml .claude/settings.json && git commit -m "Configure StateSeal policy"
-
-seal verify -- go test ./...
-seal run -- codex exec "Fix the duplicate payment bug"
-seal diff
-seal apply --branch fix/payment-idempotency
+seal run "修复重复回调导致的重复扣款，并保持现有接口兼容"
 ```
 
-`seal run` starts the agent in a managed proposal worktree. Your current branch is not changed until `seal apply` succeeds.
+On the first run, StateSeal detects an installed Agent and project checks,
+merges its lifecycle integration, and asks once before committing the protected
+configuration. It then runs the Agent loop in an isolated proposal, evaluates
+the exact candidate in clean worktrees, and asks one final delivery question.
+StateSeal follows the operating system message locale automatically and falls
+back to English. Use `--agent`, `--apply`, or `--no-apply` when explicit control
+is needed. The default view reports real lifecycle events, check results, and
+durations; use `--verbose` for the Agent stream, `--quiet` for the final status
+only, or `--json` for automation. Your branch is unchanged until apply succeeds.
 
 ## Policy
 
@@ -80,8 +77,8 @@ Commands are argv arrays and are executed directly, without an implicit shell:
 version: v0alpha1
 
 task:
-  id: payment-idempotency
-  goal: Repeated callbacks must not create duplicate charges.
+  id: payment-service
+  goal: Runtime goals are supplied by seal run.
 
 state:
   include: ["src/**", "tests/**", "go.mod", "go.sum"]
@@ -130,9 +127,11 @@ Admission checks decide whether a candidate is worth preserving. Completion chec
 
 | Command | Purpose |
 | --- | --- |
-| `seal init` | Detect a starter verifier and write `seal.yaml` |
+| `seal run "…"` | Detect or reuse an Agent, show trustworthy progress, independently verify the development loop, and offer delivery (`--verbose`, `--quiet`, and `--json` supported) |
+| `seal setup --agent …` | Explicitly configure a repository Agent integration |
+| `seal init` | Legacy policy-only initialization |
 | `seal verify -- …` | Verify the current tree and issue state-bound evidence |
-| `seal run -- …` | Run an agent in a proposal worktree and broker admission |
+| `seal run -- <command>` | Advanced compatibility mode for an arbitrary terminal Agent command |
 | `seal submit` | Request an intermediate candidate boundary during `seal run` |
 | `seal status` | Show the task, checkpoint, verdict, and coverage |
 | `seal timeline` | Show the integrity-verified event timeline (`--json` supported) |

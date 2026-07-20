@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hellogxp/stateseal/internal/config"
@@ -39,7 +40,7 @@ func TestFailedCheckDoesNotProduceCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := New(root, "enforce")
-	r, err := b.VerifyCurrent([]config.Check{{ID: "fail", Command: []string{"sh", "-c", "exit 7"}, TimeoutSeconds: 10}})
+	r, err := b.VerifyCurrent([]config.Check{{ID: "fail", Command: []string{"sh", "-c", "echo 'expected value mismatch'; exit 7"}, TimeoutSeconds: 10}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +49,9 @@ func TestFailedCheckDoesNotProduceCheckpoint(t *testing.T) {
 	}
 	if r.RuleID != protocol.RuleVerifierFailed || r.Disposition != "BLOCKED" {
 		t.Fatalf("rejection was not classified: %+v", r)
+	}
+	if !strings.Contains(r.Reason, "expected value mismatch") || !strings.Contains(r.Reason, "command/fail@v1") {
+		t.Fatalf("rejection did not provide actionable verifier feedback: %q", r.Reason)
 	}
 }
 

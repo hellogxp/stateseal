@@ -15,20 +15,113 @@ import (
 
 type Store struct{ Dir string }
 
+// ProjectSettings are local user preferences. They live outside the repository
+// so a coding Agent cannot silently change which integration StateSeal trusts.
+type ProjectSettings struct {
+	Agent                 string `json:"agent,omitempty"`
+	TrustedHookAutomation bool   `json:"trusted_hook_automation,omitempty"`
+}
+
 func Open(repoRoot, taskID string) (*Store, error) {
 	if err := identity.ValidateTaskID(taskID); err != nil {
 		return nil, fmt.Errorf("unsafe authority-state task ID: %w", err)
 	}
-	repoID := identity.Digest([]byte(repoRoot))[:20]
-	base, err := stateHome()
+	repoDir, err := repositoryDir(repoRoot)
 	if err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(base, "stateseal", repoID, taskID)
+	dir := filepath.Join(repoDir, taskID)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
 	return &Store{Dir: dir}, nil
+}
+
+func repositoryDir(repoRoot string) (string, error) {
+	repoID := identity.Digest([]byte(repoRoot))[:20]
+	base, err := stateHome()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(base, "stateseal", repoID)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// SetActiveTask records the latest task outside the repository so an Agent
+// cannot redirect status, apply, or receipt inspection by editing project files.
+func SetActiveTask(repoRoot, taskID string) error {
+	if err := identity.ValidateTaskID(taskID); err != nil {
+		return fmt.Errorf("unsafe active task ID: %w", err)
+	}
+	dir, err := repositoryDir(repoRoot)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(map[string]string{"task_id": taskID})
+	if err != nil {
+		return err
+	}
+	tmp := filepath.Join(dir, "active-task.json.tmp")
+	if err := os.WriteFile(tmp, append(raw, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filepath.Join(dir, "active-task.json"))
+}
+
+func ActiveTask(repoRoot string) (string, error) {
+	dir, err := repositoryDir(repoRoot)
+	if err != nil {
+		return "", err
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "active-task.json"))
+	if err != nil {
+		return "", err
+	}
+	var active struct {
+		TaskID string `json:"task_id"`
+	}
+	if err := json.Unmarshal(raw, &active); err != nil {
+		return "", fmt.Errorf("parse active task: %w", err)
+	}
+	if err := identity.ValidateTaskID(active.TaskID); err != nil {
+		return "", fmt.Errorf("active task: %w", err)
+	}
+	return active.TaskID, nil
+}
+
+func SaveProjectSettings(repoRoot string, settings ProjectSettings) error {
+	dir, err := repositoryDir(repoRoot)
+	if err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := filepath.Join(dir, "project-settings.json.tmp")
+	if err := os.WriteFile(tmp, append(raw, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filepath.Join(dir, "project-settings.json"))
+}
+
+func LoadProjectSettings(repoRoot string) (ProjectSettings, error) {
+	dir, err := repositoryDir(repoRoot)
+	if err != nil {
+		return ProjectSettings{}, err
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "project-settings.json"))
+	if err != nil {
+		return ProjectSettings{}, err
+	}
+	var settings ProjectSettings
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return ProjectSettings{}, fmt.Errorf("parse project settings: %w", err)
+	}
+	return settings, nil
 }
 
 func stateHome() (string, error) {

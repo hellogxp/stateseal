@@ -24,6 +24,8 @@
     {"id":"SB021","name":"codex-hook-boundary","expected":"ADMITTED-recovered"},
     {"id":"SB022","name":"mode-disposition","expected":"observed-and-overridden"},
     {"id":"SB023","name":"cross-agent-lifecycle-matrix","expected":"ADMITTED-recovered"},
-    {"id":"SB024","name":"managed-agent-cache","expected":"writable-outside-candidate"}
+    {"id":"SB024","name":"managed-agent-cache","expected":"writable-outside-candidate"},
+    {"id":"SB025","name":"no-progress-escalation","expected":"ESCALATED"},
+    {"id":"SB026","name":"user-integration-mutation-safety","expected":"unrelated-config-preserved"}
   ]
 }

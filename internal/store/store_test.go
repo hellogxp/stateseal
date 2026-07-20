@@ -31,9 +31,45 @@ func TestLedgerRejectsTampering(t *testing.T) {
 	}
 }
 
+func TestProjectSettingsRoundTrip(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	want := ProjectSettings{Agent: "codex", TrustedHookAutomation: true}
+	if err := SaveProjectSettings("/repo/project", want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadProjectSettings("/repo/project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("project settings mismatch: got %+v want %+v", got, want)
+	}
+}
+
 func TestOpenRejectsTaskIDPathTraversal(t *testing.T) {
 	if _, err := Open(t.TempDir(), "../../escape"); err == nil {
 		t.Fatal("unsafe task ID was accepted")
+	}
+}
+
+func TestActiveTaskPointerIsExternalAndValidated(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	repo := t.TempDir()
+	if err := SetActiveTask(repo, "fix-payment-race"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ActiveTask(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "fix-payment-race" {
+		t.Fatalf("active task = %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "active-task.json")); !os.IsNotExist(err) {
+		t.Fatalf("authority pointer leaked into repository: %v", err)
+	}
+	if err := SetActiveTask(repo, "../../escape"); err == nil {
+		t.Fatal("unsafe active task was accepted")
 	}
 }
 

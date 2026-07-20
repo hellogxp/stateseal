@@ -88,22 +88,26 @@ type Event struct {
 }
 
 type TaskState struct {
-	Version      string              `json:"version"`
-	TaskID       string              `json:"task_id"`
-	RepoRoot     string              `json:"repo_root"`
-	BaseCommit   string              `json:"base_commit"`
-	ProposalPath string              `json:"proposal_path,omitempty"`
-	Mode         string              `json:"mode"`
-	Status       string              `json:"status"`
-	RuleID       string              `json:"rule_id,omitempty"`
-	Disposition  string              `json:"disposition,omitempty"`
-	Coverage     string              `json:"checkpoint_coverage"`
-	Candidate    *CandidateState     `json:"candidate,omitempty"`
-	Checkpoint   *VerifiedCheckpoint `json:"checkpoint,omitempty"`
-	Receipt      *CompletionReceipt  `json:"receipt,omitempty"`
-	Evidence     []EvidenceEnvelope  `json:"evidence,omitempty"`
-	LastError    string              `json:"last_error,omitempty"`
-	Freshness    string              `json:"freshness,omitempty"`
-	StaleReason  string              `json:"stale_reason,omitempty"`
-	UpdatedAt    time.Time           `json:"updated_at"`
+	Version       string              `json:"version"`
+	TaskID        string              `json:"task_id"`
+	Goal          string              `json:"goal,omitempty"`
+	RepoRoot      string              `json:"repo_root"`
+	BaseCommit    string              `json:"base_commit"`
+	ProposalPath  string              `json:"proposal_path,omitempty"`
+	Mode          string              `json:"mode"`
+	Status        string              `json:"status"`
+	RuleID        string              `json:"rule_id,omitempty"`
+	Disposition   string              `json:"disposition,omitempty"`
+	Coverage      string              `json:"checkpoint_coverage"`
+	Candidate     *CandidateState     `json:"candidate,omitempty"`
+	Checkpoint    *VerifiedCheckpoint `json:"checkpoint,omitempty"`
+	Receipt       *CompletionReceipt  `json:"receipt,omitempty"`
+	Evidence      []EvidenceEnvelope  `json:"evidence,omitempty"`
+	LastError     string              `json:"last_error,omitempty"`
+	Freshness     string              `json:"freshness,omitempty"`
+	StaleReason   string              `json:"stale_reason,omitempty"`
+	AppliedCommit string              `json:"applied_commit,omitempty"`
+	AppliedBranch string              `json:"applied_branch,omitempty"`
+	AppliedAt     time.Time           `json:"applied_at,omitempty"`
+	UpdatedAt     time.Time           `json:"updated_at"`
 }

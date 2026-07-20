@@ -27,6 +27,9 @@ func installAgentAdapter(root, agent, binary string, force bool) (string, error)
 	case "claude":
 		path = filepath.Join(root, ".claude", "settings.json")
 		err = installNestedHooks(path, binary, agent, force, []nestedHookSpec{{"PostToolUse", "^Bash$", 1800}, {"Stop", "", 1800}})
+	case "qoder":
+		path = filepath.Join(root, ".qoder", "settings.json")
+		err = installNestedHooks(path, binary, agent, force, []nestedHookSpec{{"PostToolUse", "^(Bash|run_in_terminal)$", 30}, {"Stop", "", 30}})
 	case "gemini":
 		path = filepath.Join(root, ".gemini", "settings.json")
 		err = installNestedHooks(path, binary, agent, force, []nestedHookSpec{{"AfterTool", "^run_shell_command$", 1800000}, {"AfterAgent", "", 1800000}})
@@ -62,10 +65,7 @@ func installNestedHooks(path, binary, agent string, force bool, specs []nestedHo
 	marker := adapterMarker(agent)
 	for _, spec := range specs {
 		groups, _ := hooks[spec.event].([]any)
-		if containsMarker(groups, marker) && !force {
-			return fmt.Errorf("StateSeal %s hook already exists; use --force to replace it", spec.event)
-		}
-		if force {
+		if force || containsMarker(groups, marker) {
 			groups = removeMarkedNestedGroups(groups, marker)
 		}
 		handler := map[string]any{"type": "command", "command": hookCommandLine(binary, agent, spec.event)}
@@ -104,10 +104,7 @@ func installDirectHooks(path, binary, agent string, force bool, events []string)
 	marker := adapterMarker(agent)
 	for _, event := range events {
 		handlers, _ := hooks[event].([]any)
-		if containsMarker(handlers, marker) && !force {
-			return fmt.Errorf("StateSeal %s hook already exists; use --force to replace it", event)
-		}
-		if force {
+		if force || containsMarker(handlers, marker) {
 			handlers = removeMarkedValues(handlers, marker)
 		}
 		hooks[event] = append(handlers, map[string]any{"command": hookCommandLine(binary, agent, event)})
@@ -116,8 +113,8 @@ func installDirectHooks(path, binary, agent string, force bool, events []string)
 }
 
 func installCopilotHooks(path, binary string, force bool) error {
-	if _, err := os.Stat(path); err == nil && !force {
-		return fmt.Errorf("%s already exists; use --force to replace it", path)
+	if raw, err := os.ReadFile(path); err == nil && !force && !strings.Contains(string(raw), adapterMarker("copilot")) {
+		return fmt.Errorf("%s already exists and is not managed by StateSeal; use --force to replace it", path)
 	} else if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -129,8 +126,8 @@ func installCopilotHooks(path, binary string, force bool) error {
 }
 
 func installOpenCodePlugin(path, binary string, force bool) error {
-	if _, err := os.Stat(path); err == nil && !force {
-		return fmt.Errorf("%s already exists; use --force to replace it", path)
+	if raw, err := os.ReadFile(path); err == nil && !force && !strings.Contains(string(raw), `"opencode", "hook"`) {
+		return fmt.Errorf("%s already exists and is not managed by StateSeal; use --force to replace it", path)
 	} else if err != nil && !os.IsNotExist(err) {
 		return err
 	}

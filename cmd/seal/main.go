@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/hellogxp/stateseal/internal/broker"
 	"github.com/hellogxp/stateseal/internal/buildinfo"
 	"github.com/hellogxp/stateseal/internal/config"
+	"github.com/hellogxp/stateseal/internal/i18n"
 	"github.com/hellogxp/stateseal/internal/identity"
 	processctl "github.com/hellogxp/stateseal/internal/process"
 	"github.com/hellogxp/stateseal/internal/store"
@@ -28,6 +30,7 @@ import (
 func main() {
 	root := newRoot()
 	if err := root.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		var exitErr interface{ ExitCode() int }
 		if errors.As(err, &exitErr) {
 			os.Exit(exitErr.ExitCode())
@@ -53,7 +56,7 @@ func newRoot() *cobra.Command {
 	cmd := &cobra.Command{Use: "seal", Short: "Transactional admission for coding-agent changes", SilenceUsage: true, SilenceErrors: true}
 	cmd.Version = info.Version
 	cmd.SetVersionTemplate("seal {{.Version}}\n")
-	cmd.AddCommand(versionCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd())
+	cmd.AddCommand(versionCmd(), integrateCmd(), setupCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd())
 	return cmd
 }
 
@@ -91,13 +94,18 @@ func initCmd() *cobra.Command {
 		if _, err := os.Stat(path); err == nil && !force {
 			return codedError{10, fmt.Errorf("%s already exists; use --force to replace it", path)}
 		}
-		checks, detected := detectChecks(root)
+		plan := discoverVerificationPlan(root)
+		checks, detected := plan.Admission, strings.Join(plan.Detected, ", ")
 		if taskID == "" {
 			taskID = identity.NormalizeTaskID(filepath.Base(root))
 		} else if err := identity.ValidateTaskID(taskID); err != nil {
 			return codedError{10, err}
 		}
 		p := config.Default(taskID, checks)
+		p.Completion.Checks = plan.Completion
+		for _, gap := range plan.Uncovered {
+			p.ResidualRisks = append(p.ResidualRisks, gap+".")
+		}
 		if goal != "" {
 			p.Task.Goal = goal
 		}
@@ -107,7 +115,7 @@ func initCmd() *cobra.Command {
 		if err := identity.EnsureLocalExclude(root, ".stateseal/"); err != nil {
 			return codedError{10, err}
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "StateSeal initialized\n\nPolicy:    %s\nTask:      %s\nVerifier:  %s\nMode:      enforce (default)\n\nNext:\n  1. Review task.goal, protected paths, and verifier commands in seal.yaml.\n  2. Run `seal doctor`.\n  3. Run `seal verify -- %s`.\n  4. Start an Agent with `seal run -- <agent> [args...]`.\n", path, p.Task.ID, detected, shellJoin(checks[0].Command))
+		fmt.Fprintf(cmd.OutOrStdout(), "StateSeal initialized\n\nPolicy:    %s\nTask:      %s\nVerifier:  %s\nMode:      enforce (default)\n\nNext:\n  1. Review task.goal, protected paths, and verifier commands in seal.yaml.\n  2. Run `seal doctor`.\n  3. Install the repository adapter with `seal adapter <agent> install`.\n  4. Start managed development with `seal run -- <agent> [args...]`.\n\nStateSeal runs the configured verifier automatically; `seal verify` remains available for standalone verification.\n", path, p.Task.ID, detected)
 		return nil
 	}}
 	cmd.Flags().BoolVar(&force, "force", false, "replace an existing policy")
@@ -145,14 +153,89 @@ func verifyCmd() *cobra.Command {
 }
 
 func runCmd() *cobra.Command {
-	var mode, source string
-	var apply bool
-	cmd := &cobra.Command{Use: "run -- <agent> [args...]", Short: "Run an existing coding agent in a managed proposal worktree", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	var mode, source, agentName, goal, taskID, branch string
+	var apply, noApply, verbose, quiet, jsonOut, autonomous, yes bool
+	cmd := &cobra.Command{Use: "run \"<goal>\"", Short: "Develop a goal with a coding Agent and deliver only verified changes", Args: cobra.ArbitraryArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		locale := i18n.Detect()
 		if mode != "shadow" && mode != "warn" && mode != "enforce" {
 			return codedError{10, fmt.Errorf("invalid mode %q", mode)}
 		}
+		if apply && noApply {
+			return codedError{10, fmt.Errorf("--apply and --no-apply cannot be used together")}
+		}
+		if boolCount(verbose, quiet, jsonOut) > 1 {
+			return codedError{10, fmt.Errorf("--verbose, --quiet, and --json are mutually exclusive")}
+		}
+		legacy := cmd.ArgsLenAtDash() >= 0
+		if legacy && (agentName != "" || goal != "") {
+			return codedError{10, fmt.Errorf("do not combine --agent or --goal with a legacy command after --")}
+		}
+		if !legacy {
+			if goal != "" && len(args) > 0 {
+				return codedError{10, fmt.Errorf("provide the goal either as an argument or with --goal, not both")}
+			}
+			if goal == "" {
+				goal = strings.TrimSpace(strings.Join(args, " "))
+			}
+		}
 		root, err := identity.GitRoot(".")
 		if err != nil {
+			return codedError{10, err}
+		}
+		var agentArgs []string
+		if !legacy {
+			if strings.TrimSpace(goal) == "" {
+				return codedError{10, fmt.Errorf("%s", locale.T(i18n.GoalRequired))}
+			}
+			settings, settingsErr := store.LoadProjectSettings(root)
+			if settingsErr != nil && !os.IsNotExist(settingsErr) {
+				return codedError{10, settingsErr}
+			}
+			if agentName == "" {
+				agentName = settings.Agent
+			}
+			if agentName == "" {
+				agentName, err = detectAgent()
+				if err != nil {
+					return codedError{10, err}
+				}
+			}
+			if !isSupportedAgent(agentName) {
+				return codedError{10, fmt.Errorf("unsupported agent %q; choose one of: %s", agentName, strings.Join(supportedAgents, ", "))}
+			}
+			if _, err := exec.LookPath(agentExecutable(agentName)); err != nil {
+				return codedError{10, fmt.Errorf("%s executable %q was not found in PATH", agentDisplayName(agentName), agentExecutable(agentName))}
+			}
+			if err := identity.CheckpointIdentity(root); err != nil {
+				return codedError{10, err}
+			}
+			if err := ensureManagedSetup(cmd, root, agentName, locale, yes, quiet || jsonOut); err != nil {
+				return codedError{10, err}
+			}
+			if err := adapterHandshake(root, agentName); err != nil {
+				return codedError{10, fmt.Errorf("Agent integration handshake failed: %w", err)}
+			}
+			trustedHooks, err := authorizeTrustedHooks(cmd, root, agentName, locale, yes, jsonOut)
+			if err != nil {
+				return codedError{10, err}
+			}
+			agentArgs, err = agentLaunch(agentName, goal, autonomous, trustedHooks)
+			if err != nil {
+				return codedError{10, err}
+			}
+			if taskID == "" {
+				taskID = newTaskID(goal, time.Now().UTC())
+			}
+			if err := identity.ValidateTaskID(taskID); err != nil {
+				return codedError{10, err}
+			}
+		} else {
+			if len(args) == 0 {
+				return codedError{10, fmt.Errorf("provide a command after --")}
+			}
+			agentArgs = args
+		}
+		if err := identity.CheckpointIdentity(root); err != nil {
 			return codedError{10, err}
 		}
 		dirty, _ := identity.Git(root, "status", "--porcelain")
@@ -161,7 +244,12 @@ func runCmd() *cobra.Command {
 		}
 		restoreEnvironment := augmentLocalToolPath(root)
 		defer restoreEnvironment()
-		b, err := broker.New(root, mode)
+		var b *broker.Broker
+		if agentName != "" {
+			b, err = broker.NewTask(root, mode, taskID, goal)
+		} else {
+			b, err = broker.New(root, mode)
+		}
 		if err != nil {
 			return codedError{10, err}
 		}
@@ -180,27 +268,52 @@ func runCmd() *cobra.Command {
 		}
 		b.State.ProposalPath = proposal
 		_ = b.Store.Save(b.State)
-		fmt.Fprintf(cmd.OutOrStdout(), "Proposal worktree: %s\n", proposal)
+		progress := newRunProgress(cmd.OutOrStdout(), locale, !quiet && !jsonOut, !verbose && isInteractiveTerminal(cmd.InOrStdin(), cmd.OutOrStdout()))
+		displayAgent := agentDisplayNameFromExecutable(agentArgs[0])
+		progress.Header(b.State.Goal, displayAgent, b.Policy)
+		progress.WorkspaceReady()
+		progress.ProposalReady()
+		if verbose {
+			fmt.Fprintf(cmd.OutOrStdout(), "  Task:     %s\n  Proposal: %s\n", b.State.TaskID, proposal)
+			printVerificationPlan(cmd.OutOrStdout(), b.Policy, "")
+		}
 		if source == "auto" {
-			source = adapterSource(args[0])
+			source = adapterSource(agentArgs[0])
 		}
 		requestDir := filepath.Join(b.Store.Dir, "submissions")
 		if err := os.MkdirAll(requestDir, 0o700); err != nil {
 			return codedError{11, err}
 		}
+		adapterChecks, _ := json.Marshal(checkCommandStrings(b.Policy))
+		removeHookRuntime, err := writeHookRuntime(proposal, requestDir, mode, string(adapterChecks))
+		if err != nil {
+			return codedError{11, err}
+		}
+		defer removeHookRuntime()
 		stopBroker := make(chan struct{})
-		brokerDone := make(chan struct{})
-		go serveSubmissions(stopBroker, brokerDone, requestDir, b, m, proposal, source, cmd.ErrOrStderr())
+		brokerDone := make(chan loopOutcome)
+		go serveSubmissions(stopBroker, brokerDone, requestDir, b, m, proposal, source, displayAgent, cmd.ErrOrStderr(), progress)
 		maxWall := time.Duration(b.Policy.Budget.MaxWallSeconds) * time.Second
 		if maxWall <= 0 {
 			maxWall = 30 * time.Minute
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), maxWall)
 		defer cancel()
-		agent := exec.CommandContext(ctx, args[0], args[1:]...)
+		agent := exec.CommandContext(ctx, agentArgs[0], agentArgs[1:]...)
 		processctl.ConfigureGroup(agent)
-		agent.Dir, agent.Stdin, agent.Stdout, agent.Stderr = proposal, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
-		adapterChecks, _ := json.Marshal(checkCommandStrings(b.Policy))
+		agent.Dir, agent.Stdin = proposal, cmd.InOrStdin()
+		agentLogPath := filepath.Join(b.Store.Dir, "agent.log")
+		agentLog, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+		if err != nil {
+			return codedError{11, err}
+		}
+		defer agentLog.Close()
+		var agentStdout, agentStderr io.Writer = agentLog, agentLog
+		if verbose {
+			agentStdout = io.MultiWriter(cmd.OutOrStdout(), agentLog)
+			agentStderr = io.MultiWriter(cmd.ErrOrStderr(), agentLog)
+		}
+		agent.Stdout, agent.Stderr = agentStdout, agentStderr
 		agentEnv, err := agentCacheEnvironment(os.Environ(), os.TempDir(), b.Store.Dir)
 		if err != nil {
 			return codedError{11, err}
@@ -213,15 +326,20 @@ func runCmd() *cobra.Command {
 			"STATESEAL_MODE":           mode,
 			"STATESEAL_ADAPTER_CHECKS": string(adapterChecks),
 		})
+		if autonomous && !legacy && !quiet && !jsonOut {
+			fmt.Fprintln(cmd.OutOrStdout(), locale.T(i18n.AutonomousNotice))
+		}
+		progress.AgentStarted(displayAgent, proposal, b.State.BaseCommit)
 		agentErr := agent.Run()
+		progress.StopAgentHeartbeat()
 		_ = processctl.KillGroup(agent)
 		close(stopBroker)
-		<-brokerDone
+		loopResult := <-brokerDone
 		if ctx.Err() != nil {
-			fmt.Fprintln(cmd.ErrOrStderr(), "Agent wall-time budget was exhausted; evaluating the latest candidate.")
+			fmt.Fprintln(cmd.ErrOrStderr(), locale.T(i18n.AgentTimedOut))
 		}
 		if agentErr != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Agent exited with an error; terminal candidate will still be evaluated: %v\n", agentErr)
+			fmt.Fprintln(cmd.ErrOrStderr(), locale.T(i18n.AgentExited, agentErr))
 		}
 		recoveryReason := "terminal_candidate_regressed"
 		if ctx.Err() != nil {
@@ -229,23 +347,110 @@ func runCmd() *cobra.Command {
 		} else if agentErr != nil {
 			recoveryReason = "agent_exit_error"
 		}
+		progress.FinalStarted(b.Policy.Completion.Checks, changedFileCount(proposal, b.State.BaseCommit))
+		finalStarted := time.Now()
 		r, err := b.AdmitManagedWithReason(m, proposal, source, recoveryReason)
 		if err != nil {
 			return codedError{11, err}
 		}
-		printReceipt(cmd, r)
-		if apply && r.Verdict == protocol.VerdictAdmitted {
-			if err := applyCheckpoint(root, b.State, ""); err != nil {
+		progress.FinalResult(r, b.Policy.Completion.Checks, b.State.Evidence, time.Since(finalStarted))
+		if loopResult.NoProgress && r.Verdict != protocol.VerdictAdmitted {
+			r, err = b.RecordEscalation(loopResult.Reason)
+			if err != nil {
 				return codedError{11, err}
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "Verified checkpoint applied to the current branch.")
+		}
+		snapshot := progress.Complete()
+		if verbose {
+			fmt.Fprintln(cmd.OutOrStdout(), "\nIndependent verification")
+			printReceipt(cmd, r)
+			printRunResult(cmd.OutOrStdout(), r, b.State, locale, snapshot)
+		} else if !quiet && !jsonOut {
+			printRunResult(cmd.OutOrStdout(), r, b.State, locale, snapshot)
+		}
+		shouldApply := apply
+		if r.Verdict == protocol.VerdictAdmitted && !apply && !noApply && !jsonOut && isInteractiveTerminal(cmd.InOrStdin(), cmd.OutOrStdout()) {
+			shouldApply, err = confirmApply(cmd.InOrStdin(), cmd.OutOrStdout(), locale)
+			if err != nil {
+				return codedError{10, err}
+			}
+		}
+		if shouldApply && r.Verdict == protocol.VerdictAdmitted {
+			if branch == "" && !legacy {
+				branch = defaultDeliveryBranch(root, b.State.TaskID)
+			}
+			if err := applyCheckpoint(root, &b.State, branch); err != nil {
+				return codedError{11, err}
+			}
+			if err := persistAppliedState(b.Store, b.State); err != nil {
+				return codedError{11, err}
+			}
+			if !jsonOut && !quiet {
+				fmt.Fprintln(cmd.OutOrStdout(), locale.T(i18n.Applied, b.State.AppliedBranch))
+			}
+		} else if r.Verdict == protocol.VerdictAdmitted {
+			if !jsonOut && !quiet {
+				fmt.Fprintln(cmd.OutOrStdout(), locale.T(i18n.NotApplied))
+			}
+		}
+		if quiet {
+			printQuietRunResult(cmd.OutOrStdout(), r, b.State, locale)
+		}
+		if jsonOut {
+			if err := printJSONRunResult(cmd.OutOrStdout(), r, b.State, snapshot); err != nil {
+				return codedError{11, err}
+			}
 		}
 		return handleVerdict(cmd, r, mode)
 	}}
 	cmd.Flags().StringVar(&mode, "mode", "enforce", "shadow, warn, or enforce")
 	cmd.Flags().StringVar(&source, "source", "auto", "candidate source identity")
 	cmd.Flags().BoolVar(&apply, "apply", false, "apply an admitted checkpoint to the current branch")
+	cmd.Flags().BoolVar(&noApply, "no-apply", false, "leave an admitted checkpoint in StateSeal authority state")
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "stream detailed Agent output")
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "show only the final delivery status")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit a stable machine-readable result")
+	cmd.Flags().BoolVar(&autonomous, "autonomous", false, "allow non-interactive Agent permissions; StateSeal verification remains external")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "approve first-run project setup")
+	cmd.Flags().StringVar(&agentName, "agent", "", "coding Agent to launch")
+	cmd.Flags().StringVar(&goal, "goal", "", "intended development outcome")
+	cmd.Flags().StringVar(&taskID, "task-id", "", "task identifier (generated from the goal by default)")
+	cmd.Flags().StringVar(&branch, "branch", "", "create this branch when applying the verified checkpoint")
 	return cmd
+}
+
+func boolCount(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
+}
+
+func defaultDeliveryBranch(root, taskID string) string {
+	current, err := identity.Git(root, "branch", "--show-current")
+	if err != nil {
+		return ""
+	}
+	switch strings.TrimSpace(string(current)) {
+	case "main", "master", "trunk":
+		slug := strings.TrimSpace(taskID)
+		parts := strings.Split(slug, "-")
+		if len(parts) > 1 && len(parts[len(parts)-1]) == 10 {
+			slug = strings.Join(parts[:len(parts)-1], "-")
+		}
+		if len(slug) > 48 {
+			slug = strings.Trim(slug[:48], "-")
+		}
+		if slug == "" {
+			slug = "verified-change"
+		}
+		return "feature/" + slug
+	default:
+		return ""
+	}
 }
 
 type submissionRequest struct {
@@ -303,12 +508,25 @@ func requestSubmission() (protocol.CompletionReceipt, error) {
 	return protocol.CompletionReceipt{}, codedError{11, fmt.Errorf("broker did not answer the submission")}
 }
 
-func serveSubmissions(stop <-chan struct{}, done chan<- struct{}, dir string, b *broker.Broker, m *worktree.Manager, proposal, source string, stderr interface{ Write([]byte) (int, error) }) {
-	defer close(done)
+type loopOutcome struct {
+	NoProgress bool
+	Reason     string
+}
+
+func serveSubmissions(stop <-chan struct{}, done chan<- loopOutcome, dir string, b *broker.Broker, m *worktree.Manager, proposal, source, agent string, stderr interface{ Write([]byte) (int, error) }, progress *runProgress) {
+	outcome := loopOutcome{}
+	defer func() {
+		done <- outcome
+		close(done)
+	}()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	seen := map[string]bool{}
 	processed := 0
+	lastTree := ""
+	sameRejectedTree := 0
+	var treeHistory []string
+	var lastReceipt protocol.CompletionReceipt
 	for {
 		select {
 		case <-stop:
@@ -332,14 +550,54 @@ func serveSubmissions(stop <-chan struct{}, done chan<- struct{}, dir string, b 
 				if err != nil {
 					receipt, _ = b.RecordAbstention("malformed intermediate submission: " + err.Error())
 				}
+				if err == nil && receipt.ReceiptID == "" {
+					tree, treeErr := identity.Tree(proposal, b.Policy.State.Include)
+					if treeErr != nil {
+						err = treeErr
+					} else if tree == lastTree && lastReceipt.ReceiptID != "" {
+						if lastReceipt.Verdict != protocol.VerdictAdmitted {
+							sameRejectedTree++
+						}
+						if sameRejectedTree >= 3 {
+							outcome = loopOutcome{NoProgress: true, Reason: "agent made no progress after repeating the same rejected candidate three times"}
+							receipt, err = b.RecordEscalation(outcome.Reason)
+						} else {
+							receipt = lastReceipt
+						}
+					}
+				}
 				maxIntermediate := b.Policy.Budget.MaxCandidates - 1
-				if b.Policy.Budget.MaxCandidates > 0 && processed >= maxIntermediate {
+				if err == nil && receipt.ReceiptID == "" && b.Policy.Budget.MaxCandidates > 0 && processed >= maxIntermediate {
 					receipt, err = b.RecordAbstention("candidate budget exhausted; terminal candidate slot is reserved")
 				}
 				if err == nil && receipt.ReceiptID == "" {
 					processed++
 					b.State.Coverage = "intermediate + terminal"
+					if progress != nil {
+						progress.Candidate(processed, changedFileCount(proposal, b.State.BaseCommit), b.Policy.Admission.Checks, b.Policy.Completion.Checks)
+					}
+					started := time.Now()
 					receipt, err = b.AdmitIntermediate(m, proposal, source+"-intermediate")
+					if err == nil && progress != nil {
+						progress.CandidateResult(receipt, b.Policy.Completion.Checks, b.State.Evidence, time.Since(started), agent)
+					}
+					if err == nil {
+						lastTree = receipt.TreeSHA256
+						if b.State.Candidate != nil {
+							lastTree = b.State.Candidate.ResultTreeSHA256
+						}
+						lastReceipt = receipt
+						sameRejectedTree = 0
+						treeHistory = append(treeHistory, lastTree)
+						if len(treeHistory) > 4 {
+							treeHistory = treeHistory[len(treeHistory)-4:]
+						}
+						if len(treeHistory) == 4 && treeHistory[0] == treeHistory[2] && treeHistory[1] == treeHistory[3] && treeHistory[0] != treeHistory[1] {
+							outcome = loopOutcome{NoProgress: true, Reason: "agent oscillated between two rejected candidate states without progress"}
+							receipt, err = b.RecordEscalation(outcome.Reason)
+							lastReceipt = receipt
+						}
+					}
 				}
 				response := struct {
 					Receipt protocol.CompletionReceipt `json:"receipt"`
@@ -369,7 +627,11 @@ func statusCmd() *cobra.Command {
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(state)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Task:       %s\nStatus:     %s\nFreshness:  %s\nMode:       %s\nCoverage:   %s\n", state.TaskID, state.Status, state.Freshness, state.Mode, state.Coverage)
+		fmt.Fprintf(cmd.OutOrStdout(), "Task:       %s\n", state.TaskID)
+		if state.Goal != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Goal:       %s\n", state.Goal)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Status:     %s\nFreshness:  %s\nMode:       %s\nCoverage:   %s\n", state.Status, state.Freshness, state.Mode, state.Coverage)
 		if state.StaleReason != "" {
 			fmt.Fprintf(cmd.OutOrStdout(), "Stale:      %s\n", state.StaleReason)
 		}
@@ -381,6 +643,13 @@ func statusCmd() *cobra.Command {
 			if state.Receipt.Recovered {
 				fmt.Fprintf(cmd.OutOrStdout(), "Recovered:  yes (%s)\n", state.Receipt.SelectionReason)
 			}
+		}
+		if state.AppliedCommit != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Applied:    %s", short(state.AppliedCommit))
+			if state.AppliedBranch != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), " (%s)", state.AppliedBranch)
+			}
+			fmt.Fprintln(cmd.OutOrStdout())
 		}
 		return nil
 	}}
@@ -441,15 +710,18 @@ func diffCmd() *cobra.Command {
 func applyCmd() *cobra.Command {
 	var branch string
 	cmd := &cobra.Command{Use: "apply", Short: "Apply the verified checkpoint to the user's branch", RunE: func(cmd *cobra.Command, _ []string) error {
-		state, _, err := loadState()
+		state, stateStore, err := loadState()
 		if err != nil {
 			return codedError{10, err}
 		}
-		if err := applyCheckpoint(state.RepoRoot, state, branch); err != nil {
+		if err := applyCheckpoint(state.RepoRoot, &state, branch); err != nil {
 			var stale staleStateError
 			if errors.As(err, &stale) {
 				return codedError{3, err}
 			}
+			return codedError{11, err}
+		}
+		if err := persistAppliedState(stateStore, state); err != nil {
 			return codedError{11, err}
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Verified checkpoint applied.")
@@ -498,6 +770,8 @@ func nextAction(status string) string {
 	switch status {
 	case "ADMITTED":
 		return "inspect with `seal diff`, then use `seal apply`"
+	case "APPLIED":
+		return "the verified checkpoint is on your branch; push it or open a pull request when ready"
 	case "REJECTED":
 		return "fix the failing check in the proposal worktree and run again"
 	case "STALE":
@@ -574,6 +848,10 @@ func doctorCmd() *cobra.Command {
 			name string
 			err  error
 		}{"git executable", gitErr})
+		checks = append(checks, struct {
+			name string
+			err  error
+		}{"checkpoint Git identity", identity.CheckpointIdentity(root)})
 		failed := false
 		for _, c := range checks {
 			if c.err != nil {
@@ -592,17 +870,109 @@ func doctorCmd() *cobra.Command {
 }
 
 func detectChecks(root string) ([]config.Check, string) {
-	type candidate struct {
-		file, name string
-		command    []string
+	plan := discoverVerificationPlan(root)
+	return plan.Admission, strings.Join(plan.Detected, ", ")
+}
+
+type verificationPlan struct {
+	Admission  []config.Check
+	Completion []config.Check
+	Detected   []string
+	Uncovered  []string
+}
+
+func discoverVerificationPlan(root string) verificationPlan {
+	check := func(id string, command ...string) config.Check {
+		return config.Check{ID: id, Command: command, TimeoutSeconds: 900}
 	}
-	options := []candidate{{"go.mod", "go test", []string{"go", "test", "./..."}}, {"pyproject.toml", "pytest", []string{"pytest"}}, {"pytest.ini", "pytest", []string{"pytest"}}, {"package.json", "npm test", []string{"npm", "test"}}, {"Cargo.toml", "cargo test", []string{"cargo", "test"}}}
-	for _, c := range options {
-		if _, err := os.Stat(filepath.Join(root, c.file)); err == nil {
-			return []config.Check{{ID: "tests", Command: c.command, TimeoutSeconds: 900}}, c.name
+	var plan verificationPlan
+	has := func(name string) bool {
+		_, err := os.Stat(filepath.Join(root, name))
+		return err == nil
+	}
+	switch {
+	case has("go.mod"):
+		plan.Admission = []config.Check{check("tests", "go", "test", "./...")}
+		plan.Completion = append(append([]config.Check{}, plan.Admission...), check("static-analysis", "go", "vet", "./..."))
+		plan.Detected = []string{"Go tests", "Go static analysis"}
+	case has("package.json"):
+		var manifest struct {
+			Scripts map[string]string `json:"scripts"`
 		}
+		raw, _ := os.ReadFile(filepath.Join(root, "package.json"))
+		_ = json.Unmarshal(raw, &manifest)
+		packageManager := "npm"
+		if has("pnpm-lock.yaml") || has("pnpm-workspace.yaml") {
+			packageManager = "pnpm"
+		} else if has("yarn.lock") {
+			packageManager = "yarn"
+		}
+		for _, name := range []string{"test", "build", "lint", "typecheck"} {
+			script := strings.TrimSpace(manifest.Scripts[name])
+			if script == "" || name == "test" && strings.Contains(script, "no test specified") {
+				continue
+			}
+			command := []string{packageManager, "run", name}
+			if name == "test" {
+				command = []string{packageManager, "test"}
+			}
+			c := check(name, command...)
+			if len(plan.Admission) == 0 && name == "test" {
+				plan.Admission = append(plan.Admission, c)
+			}
+			plan.Completion = append(plan.Completion, c)
+			if name == "test" {
+				plan.Detected = append(plan.Detected, packageManager+" test")
+			} else {
+				plan.Detected = append(plan.Detected, "Node "+name)
+			}
+		}
+		if len(plan.Admission) == 0 && len(plan.Completion) > 0 {
+			plan.Admission = []config.Check{plan.Completion[0]}
+		}
+		if len(plan.Completion) == 0 {
+			plan.Uncovered = append(plan.Uncovered, "package.json declares no test, build, lint, or typecheck script")
+		}
+	case has("pyproject.toml") || has("pytest.ini") || has("setup.cfg"):
+		pythonConfig, _ := os.ReadFile(filepath.Join(root, "pyproject.toml"))
+		setupConfig, _ := os.ReadFile(filepath.Join(root, "setup.cfg"))
+		declaresPytest := has("pytest.ini") || strings.Contains(strings.ToLower(string(pythonConfig)), "pytest") || strings.Contains(strings.ToLower(string(setupConfig)), "pytest")
+		if declaresPytest {
+			plan.Admission = []config.Check{check("tests", "pytest")}
+			plan.Detected = []string{"Python pytest suite"}
+		} else if has("tests") {
+			plan.Admission = []config.Check{check("tests", "python3", "-m", "unittest", "discover", "-s", "tests")}
+			plan.Detected = []string{"Python unittest suite"}
+		} else {
+			plan.Admission = []config.Check{check("compile-check", "python3", "-m", "compileall", "-q", ".")}
+			plan.Detected = []string{"Python compile check"}
+			plan.Uncovered = append(plan.Uncovered, "no executable Python test suite was detected")
+		}
+		plan.Completion = append([]config.Check{}, plan.Admission...)
+		plan.Uncovered = append(plan.Uncovered, "Python lint and type checks were not declared as portable project commands")
+	case has("Cargo.toml"):
+		plan.Admission = []config.Check{check("tests", "cargo", "test")}
+		plan.Completion = append(append([]config.Check{}, plan.Admission...), check("compile-check", "cargo", "check"))
+		plan.Detected = []string{"Rust tests", "Rust compile check"}
+	case has("pom.xml"):
+		plan.Admission = []config.Check{check("tests", "mvn", "test")}
+		plan.Completion = append([]config.Check{}, plan.Admission...)
+		plan.Detected = []string{"Maven tests"}
+	case has("gradlew"):
+		plan.Admission = []config.Check{check("tests", "./gradlew", "test")}
+		plan.Completion = append([]config.Check{}, plan.Admission...)
+		plan.Detected = []string{"Gradle tests"}
 	}
-	return []config.Check{{ID: "review-required", Command: []string{"git", "diff", "--check"}, TimeoutSeconds: 60}}, "git diff --check (replace with project tests)"
+	if len(plan.Admission) == 0 {
+		fallback := config.Check{ID: "patch-integrity", Command: []string{"git", "diff", "--check"}, TimeoutSeconds: 60}
+		plan.Admission, plan.Completion = []config.Check{fallback}, []config.Check{fallback}
+		plan.Detected = append(plan.Detected, "Git patch integrity")
+		plan.Uncovered = append(plan.Uncovered, "no executable project test command was detected")
+	}
+	if has(".github/workflows") {
+		plan.Uncovered = append(plan.Uncovered, "remote CI workflows are not executed by the local evaluator")
+	}
+	return plan
 }
 
 func augmentLocalToolPath(root string) func() {
@@ -666,30 +1036,49 @@ func loadState() (protocol.TaskState, *store.Store, error) {
 	if err != nil {
 		return protocol.TaskState{}, nil, err
 	}
-	s, err := store.Open(root, p.Task.ID)
+	activeTask, activeErr := store.ActiveTask(root)
+	if activeErr != nil {
+		if !os.IsNotExist(activeErr) {
+			return protocol.TaskState{}, nil, activeErr
+		}
+		activeTask = p.Task.ID
+	}
+	s, err := store.Open(root, activeTask)
 	if err != nil {
 		return protocol.TaskState{}, nil, err
 	}
 	state, err := s.Load()
 	if err == nil {
 		state.Freshness, state.StaleReason = stateFreshness(root, rawPolicyDigest(root), state)
+		if state.Freshness == "CURRENT" && state.Checkpoint != nil {
+			head, headErr := identity.Git(root, "rev-parse", "HEAD")
+			if headErr == nil && strings.TrimSpace(string(head)) == state.Checkpoint.Commit {
+				state.Status = "APPLIED"
+				state.AppliedCommit = state.Checkpoint.Commit
+				if branch, branchErr := identity.Git(root, "branch", "--show-current"); branchErr == nil {
+					state.AppliedBranch = strings.TrimSpace(string(branch))
+				}
+			}
+		}
 		if state.Freshness == "STALE" {
 			if strings.Contains(state.StaleReason, "policy") {
 				state.RuleID = protocol.RulePolicyChanged
 			} else if strings.Contains(state.StaleReason, "trusted base") {
 				state.RuleID = protocol.RuleTrustedBaseChanged
+			} else if strings.Contains(state.StaleReason, "working tree") {
+				state.RuleID = protocol.RuleCandidateMutated
 			}
 		}
 	}
 	return state, s, err
 }
 
-func applyCheckpoint(root string, state protocol.TaskState, branch string) error {
+func applyCheckpoint(root string, state *protocol.TaskState, branch string) error {
 	if state.Receipt == nil || state.Receipt.Verdict != protocol.VerdictAdmitted || state.Checkpoint == nil {
 		return fmt.Errorf("only an admitted checkpoint can be applied")
 	}
 	policyDigest := rawPolicyDigest(root)
-	freshness, reason := stateFreshness(root, policyDigest, state)
+	freshness, reason := stateFreshness(root, policyDigest, *state)
 	if freshness != "CURRENT" {
 		return staleStateError{reason: "admission is stale: " + reason}
 	}
@@ -698,7 +1087,7 @@ func applyCheckpoint(root string, state protocol.TaskState, branch string) error
 		return fmt.Errorf("current worktree is dirty")
 	}
 	if state.Checkpoint.Commit == state.BaseCommit {
-		return nil
+		return markApplied(root, state)
 	}
 	if _, err := identity.Git(root, "merge-base", "--is-ancestor", state.BaseCommit, state.Checkpoint.Commit); err != nil {
 		return fmt.Errorf("checkpoint is not descended from the trusted base: %w", err)
@@ -707,10 +1096,49 @@ func applyCheckpoint(root string, state protocol.TaskState, branch string) error
 		if _, err := identity.Git(root, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
 			return fmt.Errorf("branch %q already exists", branch)
 		}
-		_, err := identity.Git(root, "switch", "-c", branch, state.Checkpoint.Commit)
+		if _, err := identity.Git(root, "switch", "-c", branch, state.Checkpoint.Commit); err != nil {
+			return err
+		}
+		return markApplied(root, state)
+	}
+	if _, err := identity.Git(root, "merge", "--ff-only", state.Checkpoint.Commit); err != nil {
 		return err
 	}
-	_, err := identity.Git(root, "merge", "--ff-only", state.Checkpoint.Commit)
+	return markApplied(root, state)
+}
+
+func markApplied(root string, state *protocol.TaskState) error {
+	head, err := identity.Git(root, "rev-parse", "HEAD")
+	if err != nil {
+		return err
+	}
+	commit := strings.TrimSpace(string(head))
+	if state.Checkpoint == nil || commit != state.Checkpoint.Commit {
+		return fmt.Errorf("applied HEAD does not match the verified checkpoint")
+	}
+	branch, err := identity.Git(root, "branch", "--show-current")
+	if err != nil {
+		return err
+	}
+	state.AppliedCommit = commit
+	state.AppliedBranch = strings.TrimSpace(string(branch))
+	state.AppliedAt = time.Now().UTC()
+	state.Status = "APPLIED"
+	state.Freshness = "CURRENT"
+	state.StaleReason = ""
+	state.RuleID = ""
+	return nil
+}
+
+func persistAppliedState(stateStore *store.Store, state protocol.TaskState) error {
+	if err := stateStore.Save(state); err != nil {
+		return err
+	}
+	_, err := stateStore.Append(protocol.Event{Type: "CHECKPOINT_APPLIED", TaskID: state.TaskID, Data: map[string]any{
+		"checkpoint_id": state.Checkpoint.CheckpointID,
+		"commit":        state.AppliedCommit,
+		"branch":        state.AppliedBranch,
+	}})
 	return err
 }
 
@@ -729,11 +1157,22 @@ func stateFreshness(root, policyDigest string, state protocol.TaskState) (string
 	if policyDigest == "" || policyDigest != state.Receipt.PolicyDigest {
 		return "STALE", "policy changed after admission"
 	}
+	dirty, err := identity.Git(root, "status", "--porcelain")
+	if err != nil {
+		return "UNKNOWN", "current Git state is unavailable"
+	}
+	if len(bytes.TrimSpace(dirty)) > 0 {
+		return "STALE", "working tree changed after admission"
+	}
 	head, err := identity.Git(root, "rev-parse", "HEAD")
 	if err != nil {
 		return "UNKNOWN", "current Git state is unavailable"
 	}
-	if strings.TrimSpace(string(head)) != state.BaseCommit {
+	current := strings.TrimSpace(string(head))
+	if state.Checkpoint != nil && current == state.Checkpoint.Commit {
+		return "CURRENT", ""
+	}
+	if current != state.BaseCommit {
 		return "STALE", "trusted base changed after admission"
 	}
 	return "CURRENT", ""
@@ -772,6 +1211,144 @@ func printReceipt(cmd *cobra.Command, r protocol.CompletionReceipt) {
 			fmt.Fprintln(f)
 		}
 	}
+}
+
+func printRunResult(w io.Writer, r protocol.CompletionReceipt, state protocol.TaskState, locale i18n.Locale, snapshot progressSnapshot) {
+	changed := verifiedChangedFiles(state)
+	if snapshot.Changed > changed {
+		changed = snapshot.Changed
+	}
+	attempts := snapshot.Attempts
+	if attempts == 0 {
+		attempts = 1
+	}
+	checks := len(r.CompletionEvidence)
+	duration := snapshot.CompletedAt.Sub(snapshot.StartedAt)
+
+	fmt.Fprintf(w, "\n%s\n", locale.T(i18n.ResultTitle))
+	switch r.Verdict {
+	case protocol.VerdictAdmitted:
+		fmt.Fprintln(w, locale.T(i18n.ResultPassed))
+	case protocol.VerdictRejected:
+		fmt.Fprintln(w, locale.T(i18n.ResultRejected))
+	case protocol.VerdictAbstained:
+		fmt.Fprintln(w, locale.T(i18n.ResultAbstained))
+	default:
+		fmt.Fprintln(w, locale.T(i18n.ResultStatus, r.Verdict))
+	}
+	printResultField(w, locale, locale.T(i18n.ChangedFilesLabel), fmt.Sprint(changed))
+	printResultField(w, locale, locale.T(i18n.AgentAttemptsLabel), fmt.Sprint(attempts))
+	printResultField(w, locale, locale.T(i18n.ChecksLabel), fmt.Sprint(checks))
+	printResultField(w, locale, locale.T(i18n.CoverageLabel), coverageLabel(state.Coverage, locale))
+	printResultField(w, locale, locale.T(i18n.DurationLabel), formatDuration(duration))
+	if r.Reason != "" && r.Verdict != protocol.VerdictAdmitted {
+		printResultField(w, locale, locale.T(i18n.ReasonLabel), compactFailure(r.Reason))
+	}
+	if r.Verdict == protocol.VerdictAdmitted {
+		fmt.Fprintf(w, "\n%s\n", locale.T(i18n.DeliveryBasis))
+		for _, key := range []i18n.Key{i18n.BasisIsolated, i18n.BasisExternal, i18n.BasisExactState, i18n.BasisRecertified} {
+			fmt.Fprintf(w, "  ✓ %s\n", locale.T(key))
+		}
+	}
+	if len(r.ResidualRisks) > 0 {
+		fmt.Fprintf(w, "\n%s\n", locale.T(i18n.ResidualRiskLabel))
+		for _, risk := range localizedRisks(r.ResidualRisks, locale) {
+			fmt.Fprintf(w, "  • %s\n", risk)
+		}
+	}
+}
+
+func printResultField(w io.Writer, locale i18n.Locale, label, value string) {
+	separator := ":"
+	if locale.IsChinese() {
+		separator = "："
+	}
+	fmt.Fprintf(w, "  %s%s %s\n", label, separator, value)
+}
+
+func verifiedChangedFiles(state protocol.TaskState) int {
+	if state.Checkpoint == nil {
+		return 0
+	}
+	out, err := identity.Git(state.RepoRoot, "diff", "--name-only", state.BaseCommit, state.Checkpoint.Commit)
+	if err != nil {
+		return 0
+	}
+	return len(strings.Fields(strings.TrimSpace(string(out))))
+}
+
+func printQuietRunResult(w io.Writer, r protocol.CompletionReceipt, state protocol.TaskState, locale i18n.Locale) {
+	message := locale.T(i18n.ResultStatus, r.Verdict)
+	if r.Verdict == protocol.VerdictAdmitted {
+		message = locale.T(i18n.ResultPassed)
+	} else if r.Verdict == protocol.VerdictRejected {
+		message = locale.T(i18n.ResultRejected)
+	} else if r.Verdict == protocol.VerdictAbstained {
+		message = locale.T(i18n.ResultAbstained)
+	}
+	branch := ""
+	if state.AppliedBranch != "" {
+		branch = " · " + state.AppliedBranch
+	}
+	fmt.Fprintf(w, "%s · %d %s · %d %s%s\n", message, verifiedChangedFiles(state), locale.T(i18n.ChangedFilesLabel), len(r.CompletionEvidence), locale.T(i18n.ChecksLabel), branch)
+}
+
+type jsonRunResult struct {
+	Verdict      protocol.Verdict `json:"verdict"`
+	TaskID       string           `json:"task_id"`
+	ReceiptID    string           `json:"receipt_id,omitempty"`
+	ChangedFiles int              `json:"changed_files"`
+	Attempts     int              `json:"attempts"`
+	ChecksPassed int              `json:"checks_passed"`
+	Coverage     string           `json:"coverage"`
+	DurationMS   int64            `json:"duration_ms"`
+	Applied      bool             `json:"applied"`
+	Branch       string           `json:"branch,omitempty"`
+	Reason       string           `json:"reason,omitempty"`
+	ResidualRisk []string         `json:"residual_risks,omitempty"`
+}
+
+func printJSONRunResult(w io.Writer, r protocol.CompletionReceipt, state protocol.TaskState, snapshot progressSnapshot) error {
+	attempts := snapshot.Attempts
+	if attempts == 0 {
+		attempts = 1
+	}
+	return json.NewEncoder(w).Encode(jsonRunResult{
+		Verdict: r.Verdict, TaskID: state.TaskID, ReceiptID: r.ReceiptID,
+		ChangedFiles: verifiedChangedFiles(state), Attempts: attempts,
+		ChecksPassed: len(r.CompletionEvidence), Coverage: state.Coverage,
+		DurationMS: snapshot.CompletedAt.Sub(snapshot.StartedAt).Milliseconds(),
+		Applied:    state.AppliedCommit != "", Branch: state.AppliedBranch,
+		Reason: r.Reason, ResidualRisk: r.ResidualRisks,
+	})
+}
+
+func localizedRisks(risks []string, locale i18n.Locale) []string {
+	result := make([]string, 0, len(risks))
+	for _, risk := range risks {
+		trimmed := strings.TrimSpace(strings.TrimSuffix(risk, "."))
+		switch trimmed {
+		case "Only configured checks were evaluated":
+			result = append(result, locale.T(i18n.RiskConfiguredOnly))
+		case "The execution host was not independently attested":
+			result = append(result, locale.T(i18n.RiskHostUnattested))
+		case "remote CI workflows are not executed by the local evaluator":
+			result = append(result, locale.T(i18n.RiskRemoteCI))
+		default:
+			result = append(result, risk)
+		}
+	}
+	return result
+}
+
+func coverageLabel(coverage string, locale i18n.Locale) string {
+	if coverage == "intermediate + terminal" {
+		return locale.T(i18n.CoverageFull)
+	}
+	if coverage == "terminal-only" || coverage == "" {
+		return locale.T(i18n.CoverageTerminal)
+	}
+	return coverage
 }
 
 func handleVerdict(cmd *cobra.Command, r protocol.CompletionReceipt, mode string) error {

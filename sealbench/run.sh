@@ -57,7 +57,7 @@ write_policy() {
     '  goal: Exercise a deterministic admission control.' \
     'state:' \
     '  include: ["**"]' \
-  '  protected: ["seal.yaml", ".stateseal/**", ".codex/**", ".claude/**", ".gemini/**", ".cursor/**", ".opencode/**", ".github/hooks/**", ".github/workflows/**"]' \
+  '  protected: ["seal.yaml", ".stateseal/**", ".codex/**", ".claude/**", ".qoder/**", ".gemini/**", ".cursor/**", ".opencode/**", ".github/hooks/**", ".github/workflows/**"]' \
     'admission:' \
     '  checks:' \
     '    - id: admission' \
@@ -325,7 +325,7 @@ commit_policy "$repo"
 pass SB022 mode-disposition
 
 # SB023: every native adapter maps its lifecycle event to the same broker boundary.
-for spec in 'claude PostToolUse tool_input' 'gemini AfterTool tool_input' 'cursor afterShellExecution top' 'copilot postToolUse toolArgs' 'opencode PostToolUse tool_input'; do
+for spec in 'claude PostToolUse tool_input' 'qoder PostToolUse tool_input' 'gemini AfterTool tool_input' 'cursor afterShellExecution top' 'copilot postToolUse toolArgs' 'opencode PostToolUse tool_input'; do
   read -r adapter event shape <<<"$spec"
   repo=$(new_repo "sb023-$adapter")
   write_policy "$repo" "sb023-$adapter" 'grep -qx good app.txt' 'grep -qx good app.txt'
@@ -363,5 +363,29 @@ proposal=$(cd "$repo" && "$SEAL" status --json | jq -r '.proposal_path')
 test ! -e "$proposal/stateseal-probe"
 pass SB024 managed-agent-cache
 
-test "$PASSED" -eq 24
-printf 'SealBench passed %d/24 deterministic failure-injection cases.\n' "$PASSED"
+# SB025: repeated rejected state stops the loop instead of consuming the wall budget.
+repo=$(new_repo sb025)
+write_policy "$repo" sb025 false false
+commit_policy "$repo"
+(cd "$repo" && SEAL_BIN="$SEAL" expect_code 4 "$SEAL" run -- sh -c '
+  printf rejected > app.txt
+  "$SEAL_BIN" submit >/dev/null 2>&1 || true
+  "$SEAL_BIN" submit >/dev/null 2>&1 || true
+  "$SEAL_BIN" submit >/dev/null 2>&1 || true
+  "$SEAL_BIN" submit >/dev/null 2>&1 || true
+')
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "ESCALATED" and .rule_id == "LC003" and (.last_error | contains("no progress"))' >/dev/null)
+pass SB025 no-progress-escalation
+
+# SB026: user-level integration install and uninstall preserve unrelated hooks.
+integration_config="$ROOT/sb026-settings.json"
+printf '%s\n' '{"theme":"dark","hooks":{"Stop":[{"hooks":[{"type":"command","command":"notify-existing"}]}]}}' > "$integration_config"
+"$SEAL" integrate qoder --config "$integration_config" --binary "$SEAL" >/dev/null
+"$SEAL" integrate doctor qoder --config "$integration_config" >/dev/null
+jq -e '.theme == "dark" and ([.hooks.Stop[][]?] | tostring | contains("notify-existing"))' "$integration_config" >/dev/null
+"$SEAL" integrate uninstall qoder --config "$integration_config" >/dev/null
+jq -e '.theme == "dark" and ([.hooks.Stop[][]?] | tostring | contains("notify-existing")) and (tostring | contains("adapter qoder hook") | not)' "$integration_config" >/dev/null
+pass SB026 user-integration-mutation-safety
+
+test "$PASSED" -eq 26
+printf 'SealBench passed %d/26 deterministic failure-injection cases.\n' "$PASSED"

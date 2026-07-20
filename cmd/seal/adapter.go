@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,7 +15,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var supportedAgents = []string{"codex", "claude", "gemini", "cursor", "copilot", "opencode"}
+var supportedAgents = []string{"codex", "claude", "qoder", "gemini", "cursor", "copilot", "opencode"}
+
+const hookRuntimePath = ".stateseal/hook-runtime.json"
+
+type hookRuntime struct {
+	SubmitDir string `json:"submit_dir"`
+	Mode      string `json:"mode"`
+	Checks    string `json:"checks"`
+}
 
 func adapterCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "adapter", Short: "Configure thin coding-agent integrations"}
@@ -65,6 +74,7 @@ func adapterRows() [][3]string {
 	return [][3]string{
 		{"codex", "PostToolUse, Stop", ".codex/hooks.json"},
 		{"claude", "PostToolUse, Stop", ".claude/settings.json"},
+		{"qoder", "PostToolUse, Stop", ".qoder/settings.json"},
 		{"gemini", "AfterTool, AfterAgent", ".gemini/settings.json"},
 		{"cursor", "afterShellExecution, stop", ".cursor/hooks.json"},
 		{"copilot", "postToolUse, agentStop", ".github/hooks/stateseal.json"},
@@ -73,7 +83,7 @@ func adapterRows() [][3]string {
 }
 
 func agentDisplayName(agent string) string {
-	names := map[string]string{"codex": "Codex", "claude": "Claude Code", "gemini": "Gemini CLI", "cursor": "Cursor Agent", "copilot": "GitHub Copilot CLI", "opencode": "OpenCode"}
+	names := map[string]string{"codex": "Codex", "claude": "Claude Code", "qoder": "Qoder", "gemini": "Gemini CLI", "cursor": "Cursor Agent", "copilot": "GitHub Copilot CLI", "opencode": "OpenCode"}
 	return names[agent]
 }
 
@@ -89,9 +99,6 @@ func runAgentHook(agent string, cmd *cobra.Command, args []string) error {
 	eventName := ""
 	if len(args) == 1 {
 		eventName = args[0]
-	}
-	if os.Getenv("STATESEAL_SUBMIT_DIR") == "" {
-		return neutralHookOutput(agent, cmd)
 	}
 	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 1<<20))
 	if err != nil {
@@ -109,7 +116,18 @@ func runAgentHook(agent string, cmd *cobra.Command, args []string) error {
 	if eventName == "" {
 		eventName, _ = event["event_name"].(string)
 	}
+	if os.Getenv("STATESEAL_SUBMIT_DIR") == "" && !hydrateHookRuntime(event) {
+		return neutralHookOutput(agent, cmd)
+	}
 	isTool, isStop := lifecycleEventKind(agent, eventName)
+	if agent == "qoder" && isStop {
+		if retry, _ := event["stop_hook_active"].(bool); retry {
+			// Qoder requires a previously blocked Stop retry to be released.
+			// The outer managed run remains authoritative and performs terminal
+			// recertification even when this lifecycle retry is released.
+			return neutralHookOutput(agent, cmd)
+		}
+	}
 	if isTool && !matchesVerifierCommand(hookCommand(event), os.Getenv("STATESEAL_ADAPTER_CHECKS")) {
 		return neutralHookOutput(agent, cmd)
 	}
@@ -130,13 +148,60 @@ func runAgentHook(agent string, cmd *cobra.Command, args []string) error {
 	if receipt.Reason != "" {
 		message += ": " + receipt.Reason
 	}
-	blockStop := isStop && os.Getenv("STATESEAL_MODE") == "enforce" && receipt.RuleID != protocol.RuleCandidateBudgetExhausted
+	blockStop := isStop && os.Getenv("STATESEAL_MODE") == "enforce" && receipt.RuleID != protocol.RuleCandidateBudgetExhausted && receipt.RuleID != protocol.RuleNoProgress
 	return agentHookMessage(agent, cmd, message, blockStop, eventName)
+}
+
+func writeHookRuntime(proposal, submitDir, mode, checks string) (func(), error) {
+	runtime := hookRuntime{SubmitDir: submitDir, Mode: mode, Checks: checks}
+	raw, err := json.Marshal(runtime)
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(proposal, filepath.FromSlash(hookRuntimePath))
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("create hook runtime directory: %w", err)
+	}
+	if err := os.WriteFile(path, append(raw, '\n'), 0o600); err != nil {
+		return nil, fmt.Errorf("write hook runtime: %w", err)
+	}
+	cleanup := func() {
+		_ = os.Remove(path)
+		_ = os.Remove(filepath.Dir(path))
+	}
+	return cleanup, nil
+}
+
+func hydrateHookRuntime(event map[string]any) bool {
+	cwd, _ := event["cwd"].(string)
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	root, err := identity.GitRoot(cwd)
+	if err != nil {
+		return false
+	}
+	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(hookRuntimePath)))
+	if err != nil {
+		return false
+	}
+	var runtime hookRuntime
+	if json.Unmarshal(raw, &runtime) != nil || !filepath.IsAbs(runtime.SubmitDir) {
+		return false
+	}
+	info, err := os.Stat(runtime.SubmitDir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	_ = os.Setenv("STATESEAL_SUBMIT_DIR", runtime.SubmitDir)
+	_ = os.Setenv("STATESEAL_MODE", runtime.Mode)
+	_ = os.Setenv("STATESEAL_ADAPTER_CHECKS", runtime.Checks)
+	return true
 }
 
 func lifecycleEventKind(agent, event string) (tool, stop bool) {
 	switch agent {
-	case "codex", "claude", "opencode":
+	case "codex", "claude", "qoder", "opencode":
 		return event == "PostToolUse", event == "Stop"
 	case "gemini":
 		return event == "AfterTool", event == "AfterAgent"
@@ -161,11 +226,20 @@ func agentHookMessage(agent string, cmd *cobra.Command, message string, block bo
 	var response map[string]any
 	switch agent {
 	case "codex":
-		response = map[string]any{"continue": !block, "systemMessage": message}
+		response = map[string]any{"systemMessage": message}
 		if block {
-			response["stopReason"] = message
+			// A blocking Stop decision is Codex's continuation signal: it
+			// creates a new prompt from the reason and keeps the Agent loop
+			// running. continue:false would take precedence and stop the turn.
+			response["decision"] = "block"
+			response["reason"] = message
+		} else if event == "PostToolUse" {
+			response["hookSpecificOutput"] = map[string]any{
+				"hookEventName":     event,
+				"additionalContext": message,
+			}
 		}
-	case "claude":
+	case "claude", "qoder":
 		if block {
 			response = map[string]any{"decision": "block", "reason": message}
 		} else {
@@ -192,7 +266,16 @@ func agentHookMessage(agent string, cmd *cobra.Command, message string, block bo
 	case "opencode":
 		return nil
 	}
-	return json.NewEncoder(cmd.OutOrStdout()).Encode(response)
+	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(response); err != nil {
+		return err
+	}
+	if agent == "qoder" && block {
+		// Qoder's IDE and CLI use exit 2 as the authoritative Stop-block
+		// signal. The JSON body remains useful to compatible surfaces, while
+		// stderr receives the same reason through the root error handler.
+		return codedError{2, errors.New(message)}
+	}
+	return nil
 }
 
 func hookCommand(event map[string]any) string {

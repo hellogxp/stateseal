@@ -1,0 +1,319 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/hellogxp/stateseal/internal/i18n"
+	"github.com/spf13/cobra"
+)
+
+// Agent integration is machine/user-scoped. Project policy remains repository
+// scoped and is created separately on the first managed task.
+type integrationSpec struct {
+	ID           string
+	DisplayName  string
+	Aliases      []string
+	ConfigPath   string
+	Surfaces     string
+	SupportLevel string
+	Restart      bool
+}
+
+var userIntegrationSpecs = []integrationSpec{
+	{
+		ID:           "codex",
+		DisplayName:  "Codex",
+		Aliases:      []string{"codex", "codex-cli", "codex-desktop"},
+		ConfigPath:   ".codex/hooks.json",
+		Surfaces:     "CLI, Desktop",
+		SupportLevel: "experimental-desktop",
+	},
+	{
+		ID:           "claude",
+		DisplayName:  "Claude Code",
+		Aliases:      []string{"claude", "claude-code"},
+		ConfigPath:   ".claude/settings.json",
+		Surfaces:     "CLI, IDE",
+		SupportLevel: "experimental-desktop",
+	},
+	{
+		ID:           "qoder",
+		DisplayName:  "Qoder",
+		Aliases:      []string{"qoder", "qoder-cli", "qoder-desktop", "qoder-ide"},
+		ConfigPath:   ".qoder/settings.json",
+		Surfaces:     "CLI, IDE, JetBrains",
+		SupportLevel: "experimental",
+		Restart:      true,
+	},
+}
+
+func integrateCmd() *cobra.Command {
+	var binary, configPath string
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "integrate <agent>",
+		Short: "Install a user-level Agent lifecycle integration",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			spec, err := findIntegrationSpec(args[0])
+			if err != nil {
+				return codedError{10, err}
+			}
+			if binary == "" {
+				binary, err = sealExecutable()
+				if err != nil {
+					return codedError{10, err}
+				}
+			}
+			if !filepath.IsAbs(binary) {
+				return codedError{10, fmt.Errorf("--binary must be an absolute path")}
+			}
+			path, err := resolveIntegrationPath(spec, configPath)
+			if err != nil {
+				return codedError{10, err}
+			}
+			if err := installUserIntegration(spec, path, binary, force); err != nil {
+				return codedError{10, err}
+			}
+			if err := validateUserIntegration(spec, path); err != nil {
+				return codedError{11, fmt.Errorf("integration self-check failed: %w", err)}
+			}
+			locale := i18n.Detect()
+			fmt.Fprintln(cmd.OutOrStdout(), integrationText(locale, "StateSeal Agent integration", "StateSeal Agent 集成"))
+			fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %s\n", integrationText(locale, spec.DisplayName+" lifecycle hooks installed", spec.DisplayName+" 生命周期 Hook 已安装"))
+			fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %s: %s\n", integrationText(locale, "Existing configuration preserved", "已有配置已保留"), path)
+			fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %s: %s\n", integrationText(locale, "Static conformance", "静态一致性检查"), integrationText(locale, "passed", "通过"))
+			fmt.Fprintf(cmd.OutOrStdout(), "\n%s: %s\n", integrationText(locale, "Support level", "支持等级"), spec.SupportLevel)
+			if spec.Restart {
+				fmt.Fprintln(cmd.OutOrStdout(), integrationText(locale, "Restart the Agent application so it reloads the hook configuration.", "请重启 Agent 应用，使其重新加载 Hook 配置。"))
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), integrationText(locale,
+				"The first managed task in each repository will ask you to confirm its verification policy.",
+				"每个项目首次执行受控任务时，StateSeal 会要求确认项目验证策略。"))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&binary, "binary", "", "absolute StateSeal binary path embedded in the integration")
+	cmd.Flags().StringVar(&configPath, "config", "", "override the Agent user configuration path")
+	cmd.Flags().BoolVar(&force, "force", false, "replace StateSeal-owned hook entries")
+	cmd.AddCommand(integrationListCmd(), integrationStatusCmd(), integrationDoctorCmd(), integrationUninstallCmd())
+	return cmd
+}
+
+func integrationListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List user-level Agent integrations",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fmt.Fprintln(cmd.OutOrStdout(), "AGENT\tSURFACES\tSUPPORT\tCONFIG")
+			for _, spec := range userIntegrationSpecs {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t~/%s\n", spec.ID, spec.Surfaces, spec.SupportLevel, spec.ConfigPath)
+			}
+			return nil
+		},
+	}
+}
+
+func integrationStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show installed user-level integrations",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fmt.Fprintln(cmd.OutOrStdout(), "AGENT\tSTATUS\tSUPPORT\tCONFIG")
+			for _, spec := range userIntegrationSpecs {
+				path, err := resolveIntegrationPath(spec, "")
+				if err != nil {
+					return err
+				}
+				status := "not-installed"
+				if err := validateUserIntegration(spec, path); err == nil {
+					status = "installed"
+				} else if _, statErr := os.Stat(path); statErr == nil {
+					status = "needs-repair"
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\n", spec.ID, status, spec.SupportLevel, path)
+			}
+			return nil
+		},
+	}
+}
+
+func integrationDoctorCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "doctor <agent>",
+		Short: "Validate an installed Agent integration",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			spec, err := findIntegrationSpec(args[0])
+			if err != nil {
+				return codedError{10, err}
+			}
+			path, err := resolveIntegrationPath(spec, configPath)
+			if err != nil {
+				return codedError{10, err}
+			}
+			if err := validateUserIntegration(spec, path); err != nil {
+				return codedError{10, err}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "✓ %s integration configuration\n✓ PostToolUse boundary\n✓ Stop boundary\nSupport: %s\n", spec.DisplayName, spec.SupportLevel)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&configPath, "config", "", "override the Agent user configuration path")
+	return cmd
+}
+
+func integrationUninstallCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "uninstall <agent>",
+		Short: "Remove only StateSeal-owned lifecycle hooks",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			spec, err := findIntegrationSpec(args[0])
+			if err != nil {
+				return codedError{10, err}
+			}
+			path, err := resolveIntegrationPath(spec, configPath)
+			if err != nil {
+				return codedError{10, err}
+			}
+			removed, err := removeUserIntegration(spec, path)
+			if err != nil {
+				return codedError{10, err}
+			}
+			if removed {
+				fmt.Fprintf(cmd.OutOrStdout(), "StateSeal integration removed from %s; unrelated configuration was preserved.\n", path)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "No StateSeal integration was present in %s.\n", path)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&configPath, "config", "", "override the Agent user configuration path")
+	return cmd
+}
+
+func findIntegrationSpec(value string) (integrationSpec, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	for _, spec := range userIntegrationSpecs {
+		for _, alias := range spec.Aliases {
+			if value == alias {
+				return spec, nil
+			}
+		}
+	}
+	return integrationSpec{}, fmt.Errorf("unsupported user-level integration %q; choose one of: codex-desktop, claude-code, qoder", value)
+}
+
+func resolveIntegrationPath(spec integrationSpec, override string) (string, error) {
+	if override != "" {
+		if !filepath.IsAbs(override) {
+			return "", fmt.Errorf("--config must be an absolute path")
+		}
+		return override, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("locate user home: %w", err)
+	}
+	return filepath.Join(home, filepath.FromSlash(spec.ConfigPath)), nil
+}
+
+func installUserIntegration(spec integrationSpec, path, binary string, force bool) error {
+	if err := backupIntegrationConfig(path); err != nil {
+		return err
+	}
+	timeout := 1800
+	matcher := "^Bash$"
+	if spec.ID == "qoder" {
+		timeout = 30
+		matcher = "^(Bash|run_in_terminal)$"
+	}
+	return installNestedHooks(path, binary, spec.ID, force, []nestedHookSpec{
+		{"PostToolUse", matcher, timeout},
+		{"Stop", "", timeout},
+	})
+}
+
+func backupIntegrationConfig(path string) error {
+	raw, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	backup := path + ".stateseal.bak"
+	if _, err := os.Stat(backup); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return os.WriteFile(backup, raw, 0o600)
+}
+
+func validateUserIntegration(spec integrationSpec, path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	hooks, ok := root["hooks"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s has no hooks object", path)
+	}
+	marker := adapterMarker(spec.ID)
+	for _, event := range []string{"PostToolUse", "Stop"} {
+		if !containsMarker(hooks[event], marker) {
+			return fmt.Errorf("%s integration is missing %s", spec.DisplayName, event)
+		}
+	}
+	return nil
+}
+
+func removeUserIntegration(spec integrationSpec, path string) (bool, error) {
+	root, err := readJSONObject(path)
+	if err != nil {
+		return false, err
+	}
+	hooks, _ := root["hooks"].(map[string]any)
+	if hooks == nil {
+		return false, nil
+	}
+	marker := adapterMarker(spec.ID)
+	removed := false
+	for _, event := range []string{"PostToolUse", "Stop"} {
+		groups, _ := hooks[event].([]any)
+		if containsMarker(groups, marker) {
+			removed = true
+		}
+		groups = removeMarkedNestedGroups(groups, marker)
+		if len(groups) == 0 {
+			delete(hooks, event)
+		} else {
+			hooks[event] = groups
+		}
+	}
+	if !removed {
+		return false, nil
+	}
+	return true, writeJSONObject(path, root)
+}
+
+func integrationText(locale i18n.Locale, english, chinese string) string {
+	if locale.IsChinese() {
+		return chinese
+	}
+	return english
+}

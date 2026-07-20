@@ -58,6 +58,19 @@ func Git(dir string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
+// CheckpointIdentity verifies that Git can resolve explicit author and
+// committer identities without falling back to host-derived values. StateSeal
+// performs this check before starting an Agent because every admitted
+// candidate must be materialized as an attributable checkpoint commit.
+func CheckpointIdentity(root string) error {
+	for _, variable := range []string{"GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"} {
+		if _, err := Git(root, "-c", "user.useConfigOnly=true", "var", variable); err != nil {
+			return fmt.Errorf("checkpoint commit requires a configured Git identity; set it for this repository with `git config --local user.name \"Your Name\"` and `git config --local user.email \"you@example.com\"`: %w", err)
+		}
+	}
+	return nil
+}
+
 func EnsureLocalExclude(root, pattern string) error {
 	out, err := Git(root, "rev-parse", "--git-path", "info/exclude")
 	if err != nil {

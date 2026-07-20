@@ -3,6 +3,7 @@ package worktree
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hellogxp/stateseal/internal/identity"
@@ -102,5 +103,133 @@ func TestRestoreRemovesTrackedAndUntrackedCandidateArtifacts(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(proposal, "untracked.txt")); !os.IsNotExist(err) {
 		t.Fatalf("untracked candidate artifact survived restore: %v", err)
+	}
+}
+
+func TestCommitCandidatePreservesRepositoryIdentity(t *testing.T) {
+	root := t.TempDir()
+	identity.Git(root, "init", "-b", "main")
+	identity.Git(root, "config", "user.name", "Repository User")
+	identity.Git(root, "config", "user.email", "repository@example.com")
+	os.WriteFile(filepath.Join(root, "state.txt"), []byte("trusted\n"), 0o644)
+	identity.Git(root, "add", ".")
+	identity.Git(root, "commit", "-m", "initial")
+
+	m, err := New(root, "identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal, err := m.Proposal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(proposal, "state.txt"), []byte("candidate\n"), 0o644)
+
+	commit, err := m.CommitCandidate(proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := identity.Git(proposal, "show", "-s", "--format=%an|%ae|%cn|%ce", commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.TrimSpace(string(out)), "Repository User|repository@example.com|Repository User|repository@example.com"; got != want {
+		t.Fatalf("checkpoint identity = %q, want %q", got, want)
+	}
+	assertGitConfig(t, root, "user.name", "Repository User")
+	assertGitConfig(t, root, "user.email", "repository@example.com")
+}
+
+func TestCommitCandidateHonorsEnvironmentIdentityWithoutPersistingIt(t *testing.T) {
+	root := t.TempDir()
+	identity.Git(root, "init", "-b", "main")
+	identity.Git(root, "config", "user.name", "Repository User")
+	identity.Git(root, "config", "user.email", "repository@example.com")
+	os.WriteFile(filepath.Join(root, "state.txt"), []byte("trusted\n"), 0o644)
+	identity.Git(root, "add", ".")
+	identity.Git(root, "commit", "-m", "initial")
+
+	m, err := New(root, "environment-identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal, err := m.Proposal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(proposal, "state.txt"), []byte("candidate\n"), 0o644)
+	t.Setenv("GIT_AUTHOR_NAME", "Automation Author")
+	t.Setenv("GIT_AUTHOR_EMAIL", "author@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Automation Committer")
+	t.Setenv("GIT_COMMITTER_EMAIL", "committer@example.com")
+
+	commit, err := m.CommitCandidate(proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := identity.Git(proposal, "show", "-s", "--format=%an|%ae|%cn|%ce", commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.TrimSpace(string(out)), "Automation Author|author@example.com|Automation Committer|committer@example.com"; got != want {
+		t.Fatalf("checkpoint identity = %q, want %q", got, want)
+	}
+	assertGitConfig(t, root, "user.name", "Repository User")
+	assertGitConfig(t, root, "user.email", "repository@example.com")
+}
+
+func TestCommitCandidateRejectsMissingExplicitIdentity(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "missing-gitconfig"))
+
+	root := t.TempDir()
+	identity.Git(root, "init", "-b", "main")
+	os.WriteFile(filepath.Join(root, "state.txt"), []byte("trusted\n"), 0o644)
+	identity.Git(root, "add", ".")
+	if _, err := identity.Git(root,
+		"-c", "user.name=Bootstrap User",
+		"-c", "user.email=bootstrap@example.com",
+		"-c", "user.useConfigOnly=true",
+		"commit", "-m", "initial",
+	); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_AUTHOR_NAME", "")
+	t.Setenv("GIT_AUTHOR_EMAIL", "")
+	t.Setenv("GIT_COMMITTER_NAME", "")
+	t.Setenv("GIT_COMMITTER_EMAIL", "")
+
+	m, err := New(root, "missing-identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal, err := m.Proposal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(proposal, "state.txt"), []byte("candidate\n"), 0o644)
+
+	if _, err := m.CommitCandidate(proposal); err == nil || !strings.Contains(err.Error(), "checkpoint commit requires a configured Git identity") {
+		t.Fatalf("CommitCandidate() error = %v, want configured identity guidance", err)
+	}
+	out, err := identity.Git(root, "config", "--local", "--list")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "user.name=") || strings.Contains(string(out), "user.email=") {
+		t.Fatalf("checkpoint commit persisted a Git identity: %s", out)
+	}
+}
+
+func assertGitConfig(t *testing.T, root, key, want string) {
+	t.Helper()
+	out, err := identity.Git(root, "config", "--local", "--get", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(out)); got != want {
+		t.Fatalf("%s = %q, want %q", key, got, want)
 	}
 }

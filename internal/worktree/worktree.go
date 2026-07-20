@@ -56,7 +56,7 @@ func (m *Manager) Proposal() (string, error) {
 	return path, nil
 }
 
-func (m *Manager) CommitCandidate(proposal string) (string, error) {
+func (m *Manager) CommitCandidate(proposal string, messages ...string) (string, error) {
 	if _, err := identity.Git(proposal, "add", "-A"); err != nil {
 		return "", err
 	}
@@ -65,14 +65,14 @@ func (m *Manager) CommitCandidate(proposal string) (string, error) {
 		out, e := identity.Git(proposal, "rev-parse", "HEAD")
 		return strings.TrimSpace(string(out)), e
 	}
-	envName, envEmail := os.Getenv("GIT_AUTHOR_NAME"), os.Getenv("GIT_AUTHOR_EMAIL")
-	if envName == "" {
-		identity.Git(proposal, "config", "user.name", "StateSeal Broker")
+	if err := identity.CheckpointIdentity(proposal); err != nil {
+		return "", err
 	}
-	if envEmail == "" {
-		identity.Git(proposal, "config", "user.email", "broker@stateseal.local")
+	message := "chore: apply verified change"
+	if len(messages) > 0 && strings.TrimSpace(messages[0]) != "" {
+		message = strings.TrimSpace(messages[0])
 	}
-	if _, err := identity.Git(proposal, "commit", "-m", "Checkpoint candidate state"); err != nil {
+	if _, err := identity.Git(proposal, "-c", "user.useConfigOnly=true", "commit", "-m", message); err != nil {
 		return "", err
 	}
 	out, err := identity.Git(proposal, "rev-parse", "HEAD")

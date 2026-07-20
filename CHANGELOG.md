@@ -23,6 +23,17 @@ the version fields in its JSON schemas.
   state outside candidate identity while preserving writable test execution.
 - Live Codex lifecycle validation and a versioned compatibility matrix that
   distinguishes runtime evidence from generated adapter contracts.
+- A one-command `seal run "goal"` experience with Agent detection, confirmed
+  first-run setup, external project preferences, Chinese output, quiet progress,
+  one-step delivery, and professional feature-branch commits.
+- Layered verifier discovery for tests, build, lint, type checks, and static
+  analysis, with explicit coverage gaps and actionable failure output.
+- Repeated-state and oscillation detection (`LC003`) so unproductive Agent
+  loops stop with a bounded, auditable result.
+- Event-driven run progress with elapsed time, candidate boundaries, verifier
+  evidence, final recertification, and explicit delivery-basis reporting.
+- Automatic system-locale matching with English fallback, plus dedicated
+  default, verbose, quiet, and stable JSON output modes.
 
 ### Security
 

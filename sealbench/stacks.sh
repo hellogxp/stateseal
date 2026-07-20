@@ -21,7 +21,7 @@ init_repo() {
 
 assert_admitted() {
   local repo=$1
-  (cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .freshness == "CURRENT" and (.evidence | length) == 2' >/dev/null)
+  (cd "$repo" && "$SEAL" status --json | jq -e '.status == "ADMITTED" and .freshness == "CURRENT" and (.evidence | length) >= 2' >/dev/null)
 }
 
 # Go: native test discovery and a managed terminal candidate.
@@ -35,20 +35,17 @@ init_repo "$go_repo"
 assert_admitted "$go_repo"
 printf 'PASS STACK-GO managed go test\n'
 
-# Python: pyproject detection with a hermetic pytest-compatible shim.
+# Python: pyproject and unittest discovery without external dependencies.
 python_repo="$ROOT/python"
-shim_dir="$ROOT/python-tools"
-mkdir -p "$python_repo/tests" "$shim_dir"
+mkdir -p "$python_repo/tests"
 printf '__pycache__/\n*.py[cod]\n' > "$python_repo/.gitignore"
 printf '[project]\nname = "stateseal-stack"\nversion = "0.0.0"\n' > "$python_repo/pyproject.toml"
 printf 'def add(a, b):\n    return a + b\n' > "$python_repo/example.py"
 printf 'import unittest\nfrom example import add\n\nclass AddTest(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n' > "$python_repo/tests/test_example.py"
-printf '#!/bin/sh\nexec python3 -m unittest discover -s tests\n' > "$shim_dir/pytest"
-chmod +x "$shim_dir/pytest"
-PATH="$shim_dir:$PATH" init_repo "$python_repo"
-(cd "$python_repo" && PATH="$shim_dir:$PATH" "$SEAL" run -- sh -c 'printf "python\n" > compatibility-probe.txt' >/dev/null)
-PATH="$shim_dir:$PATH" assert_admitted "$python_repo"
-printf 'PASS STACK-PYTHON managed pytest policy\n'
+init_repo "$python_repo"
+(cd "$python_repo" && "$SEAL" run -- sh -c 'printf "python\n" > compatibility-probe.txt' >/dev/null)
+assert_admitted "$python_repo"
+printf 'PASS STACK-PYTHON managed unittest policy\n'
 
 # Node: evaluator must reuse an ignored node_modules dependency graph.
 node_repo="$ROOT/node"

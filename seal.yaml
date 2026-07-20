@@ -11,6 +11,7 @@ state:
     - .stateseal/**
     - .codex/**
     - .claude/**
+    - .qoder/**
     - .gemini/**
     - .cursor/**
     - .opencode/**

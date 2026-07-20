@@ -31,9 +31,26 @@ func (b *Broker) RecordAbstention(reason string) (protocol.CompletionReceipt, er
 	return b.finish(protocol.VerdictAbstained, b.State.Checkpoint, nil, reason)
 }
 
+func (b *Broker) RecordEscalation(reason string) (protocol.CompletionReceipt, error) {
+	return b.finish(protocol.VerdictEscalated, b.State.Checkpoint, nil, reason)
+}
+
 func New(root, mode string) (*Broker, error) {
+	p, _, err := config.Load(root)
+	if err != nil {
+		return nil, err
+	}
+	return NewTask(root, mode, p.Task.ID, p.Task.Goal)
+}
+
+// NewTask starts a task using project policy from seal.yaml while keeping the
+// task identity and goal in external authority state.
+func NewTask(root, mode, taskID, goal string) (*Broker, error) {
 	if mode != "shadow" && mode != "warn" && mode != "enforce" {
 		return nil, fmt.Errorf("invalid mode %q", mode)
+	}
+	if err := identity.ValidateTaskID(taskID); err != nil {
+		return nil, err
 	}
 	if err := identity.EnsureLocalExclude(root, ".stateseal/"); err != nil {
 		return nil, err
@@ -42,14 +59,20 @@ func New(root, mode string) (*Broker, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := store.Open(root, p.Task.ID)
+	s, err := store.Open(root, taskID)
 	if err != nil {
 		return nil, err
 	}
 	base, _ := identity.Git(root, "rev-parse", "HEAD")
 	b := &Broker{Policy: p, PolicyHash: identity.Digest(raw), Root: root, Store: s}
-	b.State = protocol.TaskState{Version: protocol.Version, TaskID: p.Task.ID, RepoRoot: root,
+	b.State = protocol.TaskState{Version: protocol.Version, TaskID: taskID, Goal: goal, RepoRoot: root,
 		BaseCommit: strings.TrimSpace(string(base)), Mode: mode, Status: "WORKING", Coverage: "terminal-only"}
+	if err := b.Store.Save(b.State); err != nil {
+		return nil, err
+	}
+	if err := store.SetActiveTask(root, taskID); err != nil {
+		return nil, err
+	}
 	return b, nil
 }
 
@@ -92,7 +115,7 @@ func (b *Broker) VerifyCurrent(checks []config.Check) (protocol.CompletionReceip
 		return b.finish(protocol.VerdictStale, nil, evidence, "code changed while verification was running")
 	}
 	if !verifier.Passed(evidence, len(checks)) {
-		return b.finish(protocol.VerdictRejected, nil, evidence, "one or more checks failed")
+		return b.finish(protocol.VerdictRejected, nil, evidence, failureReason("one or more checks failed", evidence))
 	}
 	cp := &protocol.VerifiedCheckpoint{CheckpointID: identity.ID("cp"), CandidateID: candidate.CandidateID,
 		TreeSHA256: tree, AdmissionEvidence: evidenceIDs(evidence), PolicyDigest: b.PolicyHash, VerifiedAt: time.Now().UTC()}
@@ -136,7 +159,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 	if strings.TrimSpace(string(head)) != m.Base || len(strings.TrimSpace(string(dirty))) > 0 {
 		return b.finish(protocol.VerdictStale, b.State.Checkpoint, nil, "trusted base changed during managed execution")
 	}
-	commit, err := m.CommitCandidate(proposal)
+	commit, err := m.CommitCandidate(proposal, deliveryCommitMessage(b.State.Goal))
 	if err != nil {
 		if recoverTerminal && previousCheckpoint != nil {
 			return b.recertifyCheckpoint(m, previousCheckpoint, "", recoveryReason)
@@ -215,7 +238,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 		if recoverTerminal && previousCheckpoint != nil {
 			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, recoveryReason)
 		}
-		return b.finish(protocol.VerdictRejected, b.State.Checkpoint, admission, "admission check failed; last verified checkpoint was preserved")
+		return b.finish(protocol.VerdictRejected, b.State.Checkpoint, admission, failureReason("admission check failed; last verified checkpoint was preserved", admission))
 	}
 	cp := &protocol.VerifiedCheckpoint{CheckpointID: identity.ID("cp"), CandidateID: candidate.CandidateID,
 		TreeSHA256: tree, Commit: commit, AdmissionEvidence: evidenceIDs(admission), PolicyDigest: b.PolicyHash, VerifiedAt: time.Now().UTC()}
@@ -242,10 +265,30 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 		if recoverTerminal && previousCheckpoint != nil && previousCheckpoint.CheckpointID != cp.CheckpointID {
 			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, "terminal_completion_failed")
 		}
-		return b.finish(protocol.VerdictRejected, cp, completion, "fresh completion recertification failed")
+		return b.finish(protocol.VerdictRejected, cp, completion, failureReason("fresh completion recertification failed", completion))
 	}
 	b.event("COMPLETION_RECERTIFIED", map[string]any{"checkpoint_id": cp.CheckpointID})
 	return b.finish(protocol.VerdictAdmitted, cp, completion, "")
+}
+
+func deliveryCommitMessage(goal string) string {
+	lower := strings.ToLower(goal)
+	kind := "feat"
+	switch {
+	case strings.Contains(lower, "fix") || strings.Contains(goal, "修复"):
+		kind = "fix"
+	case strings.Contains(lower, "refactor") || strings.Contains(goal, "重构"):
+		kind = "refactor"
+	case strings.Contains(lower, "document") || strings.Contains(lower, "docs") || strings.Contains(goal, "文档"):
+		kind = "docs"
+	case strings.Contains(lower, "test") || strings.Contains(goal, "测试"):
+		kind = "test"
+	}
+	message := kind + ": implement verified change"
+	if strings.TrimSpace(goal) != "" {
+		message += "\n\nGoal: " + strings.TrimSpace(goal)
+	}
+	return message
 }
 
 func (b *Broker) recertifyCheckpoint(m *worktree.Manager, cp *protocol.VerifiedCheckpoint, terminalCandidate, selectionReason string) (protocol.CompletionReceipt, error) {
@@ -277,11 +320,30 @@ func (b *Broker) recertifyCheckpoint(m *worktree.Manager, cp *protocol.VerifiedC
 		return b.finishSelected(protocol.VerdictAbstained, cp, evidence, err.Error(), terminalCandidate, selectionReason, false)
 	}
 	if !verifier.Passed(evidence, len(b.Policy.Completion.Checks)) {
-		return b.finishSelected(protocol.VerdictRejected, cp, evidence, "selected checkpoint failed fresh completion recertification", terminalCandidate, selectionReason, false)
+		return b.finishSelected(protocol.VerdictRejected, cp, evidence, failureReason("selected checkpoint failed fresh completion recertification", evidence), terminalCandidate, selectionReason, false)
 	}
 	_ = b.event("CHECKPOINT_RESTORED", map[string]any{"checkpoint_id": cp.CheckpointID, "tree_sha256": tree})
 	_ = b.event("COMPLETION_RECERTIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "recovered": true})
 	return b.finishSelected(protocol.VerdictAdmitted, cp, evidence, "", terminalCandidate, selectionReason, true)
+}
+
+func failureReason(prefix string, evidence []protocol.EvidenceEnvelope) string {
+	for i := len(evidence) - 1; i >= 0; i-- {
+		item := evidence[i]
+		if item.ExitCode == 0 && !item.TimedOut {
+			continue
+		}
+		output := strings.TrimSpace(item.Output)
+		const limit = 2400
+		if len(output) > limit {
+			output = "…" + output[len(output)-limit:]
+		}
+		if output == "" {
+			return fmt.Sprintf("%s\nFailed verifier: %s (exit %d)", prefix, item.VerifierIdentity, item.ExitCode)
+		}
+		return fmt.Sprintf("%s\nFailed verifier: %s (exit %d)\n%s", prefix, item.VerifierIdentity, item.ExitCode, output)
+	}
+	return prefix
 }
 
 func (b *Broker) finish(verdict protocol.Verdict, cp *protocol.VerifiedCheckpoint, evidence []protocol.EvidenceEnvelope, reason string) (protocol.CompletionReceipt, error) {
@@ -382,6 +444,8 @@ func classifyRule(verdict protocol.Verdict, reason, selectionReason, terminalRea
 		return protocol.RuleRecertificationFailed
 	case strings.Contains(lower, "candidate budget exhausted"):
 		return protocol.RuleCandidateBudgetExhausted
+	case strings.Contains(lower, "no progress") || strings.Contains(lower, "oscillat"):
+		return protocol.RuleNoProgress
 	case strings.Contains(lower, "check failed") || strings.Contains(lower, "checks failed"):
 		return protocol.RuleVerifierFailed
 	case verdict == protocol.VerdictAbstained && reason != "":
