@@ -24,6 +24,20 @@ func TestTimeoutUsesStableExitCode(t *testing.T) {
 	}
 }
 
+func TestEvidenceCarriesVerifierProvenance(t *testing.T) {
+	evidence, err := RunPhaseWithBudget(t.TempDir(), "candidate", "tree", "policy", []config.Check{{
+		ID: "acceptance", Command: []string{"sh", "-c", "true"}, TimeoutSeconds: 10,
+		Layer: "L2", Origin: "project-policy",
+	}}, "completion", 0)
+	if err != nil || len(evidence) != 1 {
+		t.Fatalf("run failed: evidence=%+v err=%v", evidence, err)
+	}
+	item := evidence[0]
+	if item.VerificationPhase != "completion" || item.VerifierLayer != "L2" || item.VerifierOrigin != "project-policy" {
+		t.Fatalf("verifier provenance was not bound to evidence: %+v", item)
+	}
+}
+
 func TestInvalidWorkingDirectoryIsDeterministicallyRejected(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("not a directory"), 0o600); err != nil {

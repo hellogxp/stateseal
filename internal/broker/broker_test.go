@@ -53,6 +53,16 @@ func TestFailedCheckDoesNotProduceCheckpoint(t *testing.T) {
 	if !strings.Contains(r.Reason, "expected value mismatch") || !strings.Contains(r.Reason, "command/fail@v1") {
 		t.Fatalf("rejection did not provide actionable verifier feedback: %q", r.Reason)
 	}
+	if r.VerificationCoverage == nil || len(r.VerificationCoverage.Verifiers) != 1 {
+		t.Fatalf("receipt omitted verification coverage: %+v", r)
+	}
+	coverage := r.VerificationCoverage.Verifiers[0]
+	if coverage.Layer != "L1" || coverage.Origin != "project-policy" || coverage.Status != "failed" {
+		t.Fatalf("unexpected verifier coverage: %+v", coverage)
+	}
+	if r.LivenessImpact == nil || r.LivenessImpact.CandidatesEvaluated != 1 || r.LivenessImpact.CandidatesRejected != 1 {
+		t.Fatalf("receipt omitted liveness impact: %+v", r.LivenessImpact)
+	}
 }
 
 func TestWarnModeRecordsOverride(t *testing.T) {
@@ -178,6 +188,12 @@ func TestTerminalRegressionRecertifiesPreviousCheckpoint(t *testing.T) {
 	}
 	if recovered.RuleID != protocol.RuleTerminalRecovered {
 		t.Fatalf("recovery rule is missing: %+v", recovered)
+	}
+	if recovered.LivenessImpact == nil || !recovered.LivenessImpact.Recovered || recovered.LivenessImpact.CandidatesEvaluated != 2 || recovered.LivenessImpact.CheckpointsVerified != 1 {
+		t.Fatalf("recovery impact is incomplete: %+v", recovered.LivenessImpact)
+	}
+	if recovered.VerificationCoverage == nil || recovered.VerificationCoverage.Verifiers[0].Phase != "recertification" {
+		t.Fatalf("recertification provenance is incomplete: %+v", recovered.VerificationCoverage)
 	}
 }
 

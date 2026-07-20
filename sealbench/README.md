@@ -33,10 +33,18 @@ The v0alpha1 case catalog is:
 | SB025 | Repeated rejected state | loop escalates instead of consuming its full wall budget |
 | SB026 | User integration mutation | install/uninstall preserves unrelated Agent configuration |
 | SB027 | Codex Desktop MCP delivery | project policy approval is bound; source remains unchanged until exact-receipt apply |
+| SB028 | Gate rejects every candidate | no useful checkpoint; safety is not reported as delivery success |
+| SB029 | Known-sound candidate meets a faulty gate | false-rejection cost is visible |
+| SB030 | Semantically bad candidate meets a weak passing gate | admission remains bounded by explicit coverage and risk |
+| SB031 | Admission passes but completion gate fails | stronger gate error propagates; no admission |
+| SB032 | First use lacks native/non-interactive approval | fail closed without mutating the project |
+| SB033 | Additional loop attempts oscillate without progress | bounded `ESCALATED` result |
+| SB034 | Only a minimum L1 gate is configured | missing L2/L3 coverage remains explicit |
 
-`run.sh` executes all 27 cases with exact verdict, state, evidence, freshness,
+`run.sh` executes all 34 cases with exact verdict, state, evidence, freshness,
 process-lifecycle, cross-agent adapter, MCP, mode, cache-isolation, configuration
-mutation, and recovery assertions. `stacks.sh` adds managed Go, Python, and Node
+mutation, recovery, coverage, provenance, false-rejection, and liveness
+assertions. `stacks.sh` adds managed Go, Python, and Node
 compatibility fixtures, including Node dependency resolution from an ignored
 local `node_modules` graph.
 

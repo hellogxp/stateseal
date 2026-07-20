@@ -24,6 +24,44 @@
     "terminal_candidate": {"type": "string"},
     "selection_reason": {"type": "string"},
     "recovered": {"type": "boolean"},
+    "verification_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observation", "integrity_controls", "verifiers", "uncovered"],
+      "properties": {
+        "observation": {"type": "string"},
+        "integrity_controls": {"type": "array", "items": {"type": "string"}},
+        "verifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["check_id", "phase", "layer", "origin", "status"],
+            "properties": {
+              "check_id": {"type": "string"},
+              "phase": {"enum": ["verification", "admission", "completion", "recertification"]},
+              "layer": {"enum": ["L1", "L2", "L3"]},
+              "origin": {"enum": ["auto-discovered", "project-policy", "external"]},
+              "evidence_id": {"type": "string"},
+              "status": {"enum": ["passed", "failed", "timed_out"]}
+            }
+          }
+        },
+        "uncovered": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "liveness_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidates_evaluated", "candidates_rejected", "checkpoints_verified", "recovered"],
+      "properties": {
+        "candidates_evaluated": {"type": "integer", "minimum": 0},
+        "candidates_rejected": {"type": "integer", "minimum": 0},
+        "checkpoints_verified": {"type": "integer", "minimum": 0},
+        "recovered": {"type": "boolean"},
+        "selection_reason": {"type": "string"}
+      }
+    },
     "receipt_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
   }
 }

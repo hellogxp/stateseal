@@ -47,19 +47,27 @@ type mcpApplyInput struct {
 }
 
 type mcpProjectInspection struct {
-	Project              string   `json:"project"`
-	RepoRoot             string   `json:"repo_root"`
-	Enabled              bool     `json:"enabled"`
-	ConfirmationRequired bool     `json:"confirmation_required"`
-	Admission            []string `json:"admission"`
-	Completion           []string `json:"completion"`
-	Protected            []string `json:"protected"`
-	Execution            string   `json:"execution"`
-	ResidualRisks        []string `json:"residual_risks,omitempty"`
-	SetupToken           string   `json:"setup_token,omitempty"`
-	PolicyDigest         string   `json:"policy_digest"`
-	ConfigCommit         string   `json:"config_commit,omitempty"`
-	NextAction           string   `json:"next_action"`
+	Project              string            `json:"project"`
+	RepoRoot             string            `json:"repo_root"`
+	Enabled              bool              `json:"enabled"`
+	ConfirmationRequired bool              `json:"confirmation_required"`
+	Admission            []string          `json:"admission"`
+	Completion           []string          `json:"completion"`
+	Protected            []string          `json:"protected"`
+	Execution            string            `json:"execution"`
+	ResidualRisks        []string          `json:"residual_risks,omitempty"`
+	VerifierProvenance   []mcpVerifierPlan `json:"verifier_provenance"`
+	SetupToken           string            `json:"setup_token,omitempty"`
+	PolicyDigest         string            `json:"policy_digest"`
+	ConfigCommit         string            `json:"config_commit,omitempty"`
+	NextAction           string            `json:"next_action"`
+}
+
+type mcpVerifierPlan struct {
+	CheckID string `json:"check_id"`
+	Phase   string `json:"phase"`
+	Layer   string `json:"layer"`
+	Origin  string `json:"origin"`
 }
 
 func mcpCmd() *cobra.Command {
@@ -179,6 +187,7 @@ func inspectMCPProject(path, agent string) (mcpProjectInspection, error) {
 		Completion: checkCommandList(policy.Completion.Checks), Protected: append([]string(nil), policy.State.Protected...),
 		Execution:     "isolated Git worktree plus fresh independent evaluator",
 		ResidualRisks: append([]string(nil), policy.ResidualRisks...), PolicyDigest: policyDigest,
+		VerifierProvenance: mcpVerifierPlans(policy),
 	}
 	if enabled {
 		inspection.NextAction = "call start_delivery with the user's ordinary development goal; do not edit the source workspace directly"
@@ -187,6 +196,21 @@ func inspectMCPProject(path, agent string) (mcpProjectInspection, error) {
 	inspection.SetupToken = setupToken(root, policyDigest, agent)
 	inspection.NextAction = "present this concise verification contract, then request native approval for enable_project using the exact setup_token"
 	return inspection, nil
+}
+
+func mcpVerifierPlans(policy config.Policy) []mcpVerifierPlan {
+	result := make([]mcpVerifierPlan, 0, len(policy.Admission.Checks)+len(policy.Completion.Checks))
+	for _, phase := range []struct {
+		name   string
+		checks []config.Check
+	}{{"admission", policy.Admission.Checks}, {"completion", policy.Completion.Checks}} {
+		for _, check := range phase.checks {
+			result = append(result, mcpVerifierPlan{
+				CheckID: check.ID, Phase: phase.name, Layer: check.CoverageLayer(), Origin: check.Provenance(),
+			})
+		}
+	}
+	return result
 }
 
 func enableMCPProject(path, token, agent string) (mcpProjectInspection, error) {

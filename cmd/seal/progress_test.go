@@ -36,6 +36,11 @@ func TestMachineAndQuietResultsStayCompact(t *testing.T) {
 	receipt := protocol.CompletionReceipt{
 		Verdict: protocol.VerdictAdmitted, ReceiptID: "rcpt_test",
 		CompletionEvidence: []string{"ev_1", "ev_2"},
+		VerificationCoverage: &protocol.VerificationCoverage{
+			Observation: "terminal-only",
+			Verifiers:   []protocol.VerifierCoverage{{CheckID: "tests", Phase: "completion", Layer: "L1", Origin: "auto-discovered", Status: "passed"}},
+		},
+		LivenessImpact: &protocol.LivenessImpact{CandidatesEvaluated: 2, CheckpointsVerified: 1},
 	}
 	state := protocol.TaskState{TaskID: "task", Coverage: "terminal-only", AppliedBranch: "feature/task", AppliedCommit: "abc"}
 	snapshot := progressSnapshot{Attempts: 2, StartedAt: time.Unix(0, 0), CompletedAt: time.Unix(2, 0)}
@@ -50,6 +55,9 @@ func TestMachineAndQuietResultsStayCompact(t *testing.T) {
 	}
 	if result.Verdict != protocol.VerdictAdmitted || result.Attempts != 2 || !result.Applied || result.Branch != "feature/task" {
 		t.Fatalf("unexpected JSON result: %+v", result)
+	}
+	if result.VerificationCoverage == nil || result.LivenessImpact == nil {
+		t.Fatalf("machine result omitted coverage or delivery impact: %+v", result)
 	}
 
 	var quiet bytes.Buffer

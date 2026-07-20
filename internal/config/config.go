@@ -16,6 +16,8 @@ type Check struct {
 	Command        []string `yaml:"command" json:"command"`
 	CWD            string   `yaml:"cwd,omitempty" json:"cwd,omitempty"`
 	TimeoutSeconds int      `yaml:"timeout_seconds" json:"timeout_seconds"`
+	Layer          string   `yaml:"layer,omitempty" json:"layer,omitempty"`
+	Origin         string   `yaml:"origin,omitempty" json:"origin,omitempty"`
 }
 
 type CheckSet struct {
@@ -120,6 +122,12 @@ func (p Policy) Validate() error {
 			if c.TimeoutSeconds < 0 {
 				return fmt.Errorf("%s check %q has negative timeout", group, c.ID)
 			}
+			if c.Layer != "" && c.Layer != "L1" && c.Layer != "L2" && c.Layer != "L3" {
+				return fmt.Errorf("%s check %q has invalid layer %q; choose L1, L2, or L3", group, c.ID, c.Layer)
+			}
+			if c.Origin != "" && c.Origin != "auto-discovered" && c.Origin != "project-policy" && c.Origin != "external" {
+				return fmt.Errorf("%s check %q has invalid origin %q", group, c.ID, c.Origin)
+			}
 			if ids[c.ID] {
 				return fmt.Errorf("%s check id %q is duplicated", group, c.ID)
 			}
@@ -173,6 +181,20 @@ func (c Check) Timeout() time.Duration {
 		return 10 * time.Minute
 	}
 	return time.Duration(c.TimeoutSeconds) * time.Second
+}
+
+func (c Check) CoverageLayer() string {
+	if c.Layer == "" {
+		return "L1"
+	}
+	return c.Layer
+}
+
+func (c Check) Provenance() string {
+	if c.Origin == "" {
+		return "project-policy"
+	}
+	return c.Origin
 }
 
 func Write(path string, p Policy) error {

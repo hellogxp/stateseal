@@ -100,6 +100,7 @@ func (b *Broker) VerifyCurrent(checks []config.Check) (protocol.CompletionReceip
 		BaseTreeSHA256: identity.Digest(baseTree), PatchSHA256: patchDigest(b.Root), ResultTreeSHA256: tree,
 		CreatedAt: time.Now().UTC(), Source: "seal-verify"}
 	b.State.Candidate = &candidate
+	b.State.CandidatesEvaluated++
 	b.State.Status = "VERIFYING"
 	b.event("CANDIDATE_SUBMITTED", map[string]any{"candidate_id": candidate.CandidateID, "tree_sha256": tree})
 	evidence, err := verifier.Run(b.Root, candidate.CandidateID, tree, b.PolicyHash, checks)
@@ -115,11 +116,13 @@ func (b *Broker) VerifyCurrent(checks []config.Check) (protocol.CompletionReceip
 		return b.finish(protocol.VerdictStale, nil, evidence, "code changed while verification was running")
 	}
 	if !verifier.Passed(evidence, len(checks)) {
+		b.State.CandidatesRejected++
 		return b.finish(protocol.VerdictRejected, nil, evidence, failureReason("one or more checks failed", evidence))
 	}
 	cp := &protocol.VerifiedCheckpoint{CheckpointID: identity.ID("cp"), CandidateID: candidate.CandidateID,
 		TreeSHA256: tree, AdmissionEvidence: evidenceIDs(evidence), PolicyDigest: b.PolicyHash, VerifiedAt: time.Now().UTC()}
 	b.State.Checkpoint = cp
+	b.State.CheckpointsVerified++
 	b.event("CHECKPOINT_VERIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "tree_sha256": tree})
 	return b.finish(protocol.VerdictAdmitted, cp, evidence, "")
 }
@@ -193,6 +196,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 		BaseTreeSHA256: baseTree, PatchSHA256: identity.Digest(patch), ResultTreeSHA256: tree,
 		Commit: commit, CreatedAt: time.Now().UTC(), Source: source}
 	b.State.Candidate = &candidate
+	b.State.CandidatesEvaluated++
 	b.State.Status = "VERIFYING"
 	b.event("CANDIDATE_SUBMITTED", map[string]any{"candidate_id": candidate.CandidateID, "tree_sha256": tree, "commit": commit})
 	if unsafe, err := identity.UnsafeSymlinks(eval); err != nil || len(unsafe) > 0 {
@@ -224,7 +228,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 			return b.finish(protocol.VerdictRejected, nil, nil, "protected path changed: "+file)
 		}
 	}
-	admission, err := verifier.RunWithBudget(eval, candidate.CandidateID, tree, b.PolicyHash, b.Policy.Admission.Checks, time.Duration(b.Policy.Admission.TimeoutSeconds)*time.Second)
+	admission, err := verifier.RunPhaseWithBudget(eval, candidate.CandidateID, tree, b.PolicyHash, b.Policy.Admission.Checks, "admission", time.Duration(b.Policy.Admission.TimeoutSeconds)*time.Second)
 	b.State.Evidence = append(b.State.Evidence, admission...)
 	if err != nil {
 		return b.finish(protocol.VerdictAbstained, nil, admission, err.Error())
@@ -234,6 +238,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 		return b.finish(protocol.VerdictStale, nil, admission, "candidate changed during admission")
 	}
 	if !verifier.Passed(admission, len(b.Policy.Admission.Checks)) {
+		b.State.CandidatesRejected++
 		b.event("CANDIDATE_REJECTED", map[string]any{"reason": "admission check failed"})
 		if recoverTerminal && previousCheckpoint != nil {
 			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, recoveryReason)
@@ -243,6 +248,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 	cp := &protocol.VerifiedCheckpoint{CheckpointID: identity.ID("cp"), CandidateID: candidate.CandidateID,
 		TreeSHA256: tree, Commit: commit, AdmissionEvidence: evidenceIDs(admission), PolicyDigest: b.PolicyHash, VerifiedAt: time.Now().UTC()}
 	b.State.Checkpoint = cp
+	b.State.CheckpointsVerified++
 	b.State.Status = "VERIFIED"
 	b.event("CHECKPOINT_VERIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "tree_sha256": tree, "commit": commit})
 
@@ -256,12 +262,13 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 	if err != nil || freshTree != cp.TreeSHA256 {
 		return b.finish(protocol.VerdictStale, cp, admission, "checkpoint tree could not be reproduced")
 	}
-	completion, err := verifier.RunWithBudget(freshEval, candidate.CandidateID, freshTree, b.PolicyHash, b.Policy.Completion.Checks, time.Duration(b.Policy.Completion.TimeoutSeconds)*time.Second)
+	completion, err := verifier.RunPhaseWithBudget(freshEval, candidate.CandidateID, freshTree, b.PolicyHash, b.Policy.Completion.Checks, "completion", time.Duration(b.Policy.Completion.TimeoutSeconds)*time.Second)
 	b.State.Evidence = append(b.State.Evidence, completion...)
 	if err != nil {
 		return b.finish(protocol.VerdictAbstained, cp, completion, err.Error())
 	}
 	if !verifier.Passed(completion, len(b.Policy.Completion.Checks)) {
+		b.State.CandidatesRejected++
 		if recoverTerminal && previousCheckpoint != nil && previousCheckpoint.CheckpointID != cp.CheckpointID {
 			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, "terminal_completion_failed")
 		}
@@ -314,7 +321,7 @@ func (b *Broker) recertifyCheckpoint(m *worktree.Manager, cp *protocol.VerifiedC
 	if tree != cp.TreeSHA256 {
 		return b.finishSelected(protocol.VerdictStale, cp, nil, "selected checkpoint tree could not be reproduced", terminalCandidate, selectionReason, false)
 	}
-	evidence, err := verifier.RunWithBudget(eval, cp.CandidateID, tree, b.PolicyHash, b.Policy.Completion.Checks, time.Duration(b.Policy.Completion.TimeoutSeconds)*time.Second)
+	evidence, err := verifier.RunPhaseWithBudget(eval, cp.CandidateID, tree, b.PolicyHash, b.Policy.Completion.Checks, "recertification", time.Duration(b.Policy.Completion.TimeoutSeconds)*time.Second)
 	b.State.Evidence = append(b.State.Evidence, evidence...)
 	if err != nil {
 		return b.finishSelected(protocol.VerdictAbstained, cp, evidence, err.Error(), terminalCandidate, selectionReason, false)
@@ -365,6 +372,14 @@ func (b *Broker) finishSelected(verdict protocol.Verdict, cp *protocol.VerifiedC
 		receipt.CheckpointID, receipt.TreeSHA256 = cp.CheckpointID, cp.TreeSHA256
 	}
 	receipt.CompletionEvidence = evidenceIDs(evidence)
+	receipt.VerificationCoverage = b.verificationCoverage(evidence)
+	receipt.VerificationCoverage.Uncovered = append([]string(nil), receipt.ResidualRisks...)
+	receipt.LivenessImpact = &protocol.LivenessImpact{
+		CandidatesEvaluated: b.State.CandidatesEvaluated,
+		CandidatesRejected:  b.State.CandidatesRejected,
+		CheckpointsVerified: b.State.CheckpointsVerified,
+		Recovered:           recovered, SelectionReason: selectionReason,
+	}
 	receipt.ReceiptDigest = ""
 	receipt.ReceiptDigest, _ = identity.JSONDigest(receipt)
 	b.State.Receipt = &receipt
@@ -390,6 +405,48 @@ func (b *Broker) finishSelected(verdict protocol.Verdict, cp *protocol.VerifiedC
 	}
 	_ = path
 	return receipt, err
+}
+
+func (b *Broker) verificationCoverage(evidence []protocol.EvidenceEnvelope) *protocol.VerificationCoverage {
+	coverage := &protocol.VerificationCoverage{
+		Observation: b.State.Coverage,
+		Verifiers:   []protocol.VerifierCoverage{},
+		IntegrityControls: []string{
+			"exact-code-state binding",
+			"policy and verifier-suite binding",
+			"receipt integrity",
+		},
+		Uncovered: []string{},
+	}
+	for _, item := range evidence {
+		if item.VerificationPhase == "completion" || item.VerificationPhase == "recertification" {
+			if !contains(coverage.IntegrityControls, "fresh evaluator recertification") {
+				coverage.IntegrityControls = append(coverage.IntegrityControls, "fresh evaluator recertification")
+			}
+		}
+		status := "passed"
+		if item.TimedOut {
+			status = "timed_out"
+		} else if item.ExitCode != 0 {
+			status = "failed"
+		}
+		checkID := strings.TrimPrefix(item.VerifierIdentity, "command/")
+		checkID = strings.TrimSuffix(checkID, "@v1")
+		coverage.Verifiers = append(coverage.Verifiers, protocol.VerifierCoverage{
+			CheckID: checkID, Phase: item.VerificationPhase, Layer: item.VerifierLayer,
+			Origin: item.VerifierOrigin, EvidenceID: item.EvidenceID, Status: status,
+		})
+	}
+	return coverage
+}
+
+func contains(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func modeDisposition(mode string, verdict protocol.Verdict) string {

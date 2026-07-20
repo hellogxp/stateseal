@@ -403,5 +403,107 @@ PATH="$fake_bin:$PATH" python3 "$(dirname "$0")/mcp_client.py" "$SEAL" "$repo"
 [[ "$(git -C "$repo" branch --show-current)" == feature/* ]]
 pass SB027 codex-desktop-controlled-delivery
 
-test "$PASSED" -eq 27
-printf 'SealBench passed %d/27 deterministic failure-injection cases.\n' "$PASSED"
+# SB028: blocking every candidate is safe but produces no useful checkpoint.
+repo=$(new_repo sb028)
+write_policy "$repo" sb028 false false
+commit_policy "$repo"
+(cd "$repo" && expect_code 1 "$SEAL" run -- sh -c 'printf candidate > app.txt')
+(cd "$repo" && "$SEAL" status --json | jq -e '
+  .status == "REJECTED" and .checkpoint == null and
+  .receipt.liveness_impact.candidates_evaluated == 1 and
+  .receipt.liveness_impact.candidates_rejected == 1 and
+  .receipt.liveness_impact.checkpoints_verified == 0
+' >/dev/null)
+pass SB028 safe-by-abstention
+
+# SB029: a known-sound candidate rejected by a faulty gate exposes its delivery cost.
+repo=$(new_repo sb029)
+write_policy "$repo" sb029 'grep -qx impossible app.txt' 'grep -qx impossible app.txt'
+commit_policy "$repo"
+(cd "$repo" && expect_code 1 "$SEAL" run -- sh -c 'printf "sound\n" > app.txt')
+grep -qx original "$repo/app.txt"
+(cd "$repo" && "$SEAL" status --json | jq -e '
+  .receipt.liveness_impact.candidates_rejected == 1 and
+  .receipt.verification_coverage.verifiers[0].status == "failed"
+' >/dev/null)
+pass SB029 sound-candidate-false-rejection
+
+# SB030: a weak passing gate does not become a specification-completeness claim.
+repo=$(new_repo sb030)
+write_policy "$repo" sb030 true true
+commit_policy "$repo"
+(cd "$repo" && "$SEAL" run -- sh -c 'printf "semantically-bad\n" > app.txt' >/dev/null)
+(cd "$repo" && "$SEAL" status --json | jq -e '
+  .status == "ADMITTED" and
+  .receipt.verification_coverage.verifiers[0].layer == "L1" and
+  .receipt.verification_coverage.verifiers[0].origin == "project-policy" and
+  (.receipt.verification_coverage.uncovered | length) > 0
+' >/dev/null)
+pass SB030 weak-verifier-false-pass
+
+# SB031: admission success cannot hide a stronger completion-gate failure.
+repo=$(new_repo sb031)
+write_policy "$repo" sb031 true false
+commit_policy "$repo"
+(cd "$repo" && expect_code 1 "$SEAL" run -- sh -c 'printf candidate > app.txt')
+(cd "$repo" && "$SEAL" status --json | jq -e '
+  .status == "REJECTED" and .checkpoint != null and
+  .receipt.verification_coverage.verifiers[0].phase == "completion" and
+  .receipt.verification_coverage.verifiers[0].status == "failed" and
+  .receipt.liveness_impact.checkpoints_verified == 1
+' >/dev/null)
+pass SB031 gate-error-propagation
+
+# SB032: non-interactive first use cannot silently approve project mutation.
+repo=$(new_repo sb032)
+fake_bin="$ROOT/sb032-bin"
+mkdir -p "$fake_bin"
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$fake_bin/codex"
+chmod +x "$fake_bin/codex"
+(cd "$repo" && PATH="$fake_bin:$PATH" expect_code 10 "$SEAL" run --agent codex 'change app behavior')
+test ! -e "$repo/seal.yaml"
+test "$(git -C "$repo" rev-list --count HEAD)" -eq 1
+pass SB032 unapproved-interface-mutation
+
+# SB033: additional loop depth without state progress escalates deterministically.
+repo=$(new_repo sb033)
+write_policy "$repo" sb033 false false
+commit_policy "$repo"
+(cd "$repo" && SEAL_BIN="$SEAL" expect_code 4 "$SEAL" run -- sh -c '
+  for value in alpha beta alpha beta; do
+    printf "%s\n" "$value" > app.txt
+    "$SEAL_BIN" submit >/dev/null 2>&1 || true
+  done
+')
+(cd "$repo" && "$SEAL" status --json | jq -e '.status == "ESCALATED" and .rule_id == "LC003" and (.last_error | contains("oscillat"))' >/dev/null)
+pass SB033 loop-depth-without-progress
+
+# SB034: missing domain and protected-environment coverage remains explicit.
+repo=$(new_repo sb034)
+write_policy "$repo" sb034 true true
+awk '
+  /      timeout_seconds: 10/ {
+    print
+    print "      layer: L1"
+    print "      origin: auto-discovered"
+    next
+  }
+  /SealBench evaluates control behavior/ {
+    print "  - Domain acceptance was not evaluated."
+    print "  - Protected remote CI was not evaluated."
+    next
+  }
+  { print }
+' "$repo/seal.yaml" > "$repo/seal.yaml.tmp"
+mv "$repo/seal.yaml.tmp" "$repo/seal.yaml"
+commit_policy "$repo"
+(cd "$repo" && "$SEAL" run -- sh -c 'printf candidate > app.txt' >/dev/null)
+(cd "$repo" && "$SEAL" status --json | jq -e '
+  .receipt.verification_coverage.verifiers[0].origin == "auto-discovered" and
+  (.receipt.verification_coverage.uncovered | index("Domain acceptance was not evaluated.")) != null and
+  (.receipt.verification_coverage.uncovered | index("Protected remote CI was not evaluated.")) != null
+' >/dev/null)
+pass SB034 coverage-collapse-disclosure
+
+test "$PASSED" -eq 34
+printf 'SealBench passed %d/34 deterministic failure-injection cases.\n' "$PASSED"

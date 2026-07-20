@@ -648,6 +648,13 @@ func statusCmd() *cobra.Command {
 		}
 		if state.Receipt != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Receipt:    %s\n", state.Receipt.ReceiptID)
+			if coverage := state.Receipt.VerificationCoverage; coverage != nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "Verifiers:  %s\n", verifierCoverageSummary(coverage.Verifiers))
+				fmt.Fprintf(cmd.OutOrStdout(), "Uncovered:  %d declared risk(s)\n", len(coverage.Uncovered))
+			}
+			if impact := state.Receipt.LivenessImpact; impact != nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "Candidates: %d evaluated, %d rejected, %d checkpoint(s) verified\n", impact.CandidatesEvaluated, impact.CandidatesRejected, impact.CheckpointsVerified)
+			}
 			if state.Receipt.Recovered {
 				fmt.Fprintf(cmd.OutOrStdout(), "Recovered:  yes (%s)\n", state.Receipt.SelectionReason)
 			}
@@ -768,6 +775,9 @@ func explainCmd() *cobra.Command {
 			}
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Next: %s\n", next)
+		if state.Receipt != nil {
+			printCoverageSummary(cmd.OutOrStdout(), *state.Receipt, i18n.Detect())
+		}
 		return nil
 	}}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit a machine-readable explanation")
@@ -891,7 +901,7 @@ type verificationPlan struct {
 
 func discoverVerificationPlan(root string) verificationPlan {
 	check := func(id string, command ...string) config.Check {
-		return config.Check{ID: id, Command: command, TimeoutSeconds: 900}
+		return config.Check{ID: id, Command: command, TimeoutSeconds: 900, Layer: "L1", Origin: "auto-discovered"}
 	}
 	var plan verificationPlan
 	has := func(name string) bool {
@@ -972,7 +982,7 @@ func discoverVerificationPlan(root string) verificationPlan {
 		plan.Detected = []string{"Gradle tests"}
 	}
 	if len(plan.Admission) == 0 {
-		fallback := config.Check{ID: "patch-integrity", Command: []string{"git", "diff", "--check"}, TimeoutSeconds: 60}
+		fallback := config.Check{ID: "patch-integrity", Command: []string{"git", "diff", "--check"}, TimeoutSeconds: 60, Layer: "L1", Origin: "auto-discovered"}
 		plan.Admission, plan.Completion = []config.Check{fallback}, []config.Check{fallback}
 		plan.Detected = append(plan.Detected, "Git patch integrity")
 		plan.Uncovered = append(plan.Uncovered, "no executable project test command was detected")
@@ -1201,6 +1211,13 @@ func printReceipt(cmd *cobra.Command, r protocol.CompletionReceipt) {
 	if r.Recovered {
 		fmt.Fprintf(cmd.OutOrStdout(), "Recovered checkpoint: %s\nTerminal candidate:  %s\nSelection reason:    %s\n", r.CheckpointID, r.TerminalCandidate, r.SelectionReason)
 	}
+	if r.VerificationCoverage != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Coverage: %s; %s\n", r.VerificationCoverage.Observation, verifierCoverageSummary(r.VerificationCoverage.Verifiers))
+	}
+	if r.LivenessImpact != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Delivery impact: %d candidate(s) evaluated, %d rejected, %d checkpoint(s) verified\n",
+			r.LivenessImpact.CandidatesEvaluated, r.LivenessImpact.CandidatesRejected, r.LivenessImpact.CheckpointsVerified)
+	}
 	fmt.Fprintln(cmd.OutOrStdout(), "Residual risk:")
 	for _, risk := range r.ResidualRisks {
 		fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", risk)
@@ -1258,6 +1275,7 @@ func printRunResult(w io.Writer, r protocol.CompletionReceipt, state protocol.Ta
 			fmt.Fprintf(w, "  ✓ %s\n", locale.T(key))
 		}
 	}
+	printCoverageSummary(w, r, locale)
 	if len(r.ResidualRisks) > 0 {
 		fmt.Fprintf(w, "\n%s\n", locale.T(i18n.ResidualRiskLabel))
 		for _, risk := range localizedRisks(r.ResidualRisks, locale) {
@@ -1302,18 +1320,20 @@ func printQuietRunResult(w io.Writer, r protocol.CompletionReceipt, state protoc
 }
 
 type jsonRunResult struct {
-	Verdict      protocol.Verdict `json:"verdict"`
-	TaskID       string           `json:"task_id"`
-	ReceiptID    string           `json:"receipt_id,omitempty"`
-	ChangedFiles int              `json:"changed_files"`
-	Attempts     int              `json:"attempts"`
-	ChecksPassed int              `json:"checks_passed"`
-	Coverage     string           `json:"coverage"`
-	DurationMS   int64            `json:"duration_ms"`
-	Applied      bool             `json:"applied"`
-	Branch       string           `json:"branch,omitempty"`
-	Reason       string           `json:"reason,omitempty"`
-	ResidualRisk []string         `json:"residual_risks,omitempty"`
+	Verdict              protocol.Verdict               `json:"verdict"`
+	TaskID               string                         `json:"task_id"`
+	ReceiptID            string                         `json:"receipt_id,omitempty"`
+	ChangedFiles         int                            `json:"changed_files"`
+	Attempts             int                            `json:"attempts"`
+	ChecksPassed         int                            `json:"checks_passed"`
+	Coverage             string                         `json:"coverage"`
+	DurationMS           int64                          `json:"duration_ms"`
+	Applied              bool                           `json:"applied"`
+	Branch               string                         `json:"branch,omitempty"`
+	Reason               string                         `json:"reason,omitempty"`
+	ResidualRisk         []string                       `json:"residual_risks,omitempty"`
+	VerificationCoverage *protocol.VerificationCoverage `json:"verification_coverage,omitempty"`
+	LivenessImpact       *protocol.LivenessImpact       `json:"liveness_impact,omitempty"`
 }
 
 func printJSONRunResult(w io.Writer, r protocol.CompletionReceipt, state protocol.TaskState, snapshot progressSnapshot) error {
@@ -1328,7 +1348,73 @@ func printJSONRunResult(w io.Writer, r protocol.CompletionReceipt, state protoco
 		DurationMS: snapshot.CompletedAt.Sub(snapshot.StartedAt).Milliseconds(),
 		Applied:    state.AppliedCommit != "", Branch: state.AppliedBranch,
 		Reason: r.Reason, ResidualRisk: r.ResidualRisks,
+		VerificationCoverage: r.VerificationCoverage, LivenessImpact: r.LivenessImpact,
 	})
+}
+
+func printCoverageSummary(w io.Writer, r protocol.CompletionReceipt, locale i18n.Locale) {
+	coverage := r.VerificationCoverage
+	if coverage == nil {
+		return
+	}
+	fmt.Fprintf(w, "\n%s\n", integrationText(locale, "Verification coverage", "验证覆盖"))
+	fmt.Fprintf(w, "  L0 · %s\n", integrationText(locale,
+		"state, policy, freshness, checkpoint, and receipt integrity",
+		"代码状态、策略、新鲜度、Checkpoint 与 Receipt 完整性"))
+	if len(coverage.Verifiers) > 0 {
+		fmt.Fprintf(w, "  %s\n", verifierCoverageSummaryLocalized(coverage.Verifiers, locale))
+	}
+	if impact := r.LivenessImpact; impact != nil {
+		if locale.IsChinese() {
+			fmt.Fprintf(w, "  交付影响：评估 %d 个候选 · 拒绝 %d 个 · 验证 %d 个 Checkpoint\n",
+				impact.CandidatesEvaluated, impact.CandidatesRejected, impact.CheckpointsVerified)
+		} else {
+			fmt.Fprintf(w, "  Delivery impact: %d evaluated · %d rejected · %d checkpoints verified\n",
+				impact.CandidatesEvaluated, impact.CandidatesRejected, impact.CheckpointsVerified)
+		}
+	}
+}
+
+func verifierCoverageSummaryLocalized(verifiers []protocol.VerifierCoverage, locale i18n.Locale) string {
+	if !locale.IsChinese() {
+		return verifierCoverageSummary(verifiers)
+	}
+	groups := make([]string, 0, len(verifiers))
+	seen := map[string]bool{}
+	for _, verifier := range verifiers {
+		origin := verifier.Origin
+		switch origin {
+		case "auto-discovered":
+			origin = "自动发现"
+		case "project-policy":
+			origin = "项目策略"
+		case "external":
+			origin = "外部权威"
+		}
+		key := verifier.Layer + " · " + origin
+		if !seen[key] {
+			seen[key] = true
+			groups = append(groups, key)
+		}
+	}
+	return strings.Join(groups, "；") + fmt.Sprintf(" · %d 项检查", len(verifiers))
+}
+
+func verifierCoverageSummary(verifiers []protocol.VerifierCoverage) string {
+	if len(verifiers) == 0 {
+		return "no command verifier evidence"
+	}
+	groups := make([]string, 0, len(verifiers))
+	seen := map[string]bool{}
+	for _, verifier := range verifiers {
+		key := verifier.Layer + " · " + verifier.Origin
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		groups = append(groups, key)
+	}
+	return strings.Join(groups, "; ") + fmt.Sprintf(" · %d check(s)", len(verifiers))
 }
 
 func localizedRisks(risks []string, locale i18n.Locale) []string {

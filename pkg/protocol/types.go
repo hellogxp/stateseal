@@ -36,6 +36,9 @@ type EvidenceEnvelope struct {
 	EnvironmentDigest string    `json:"environment_digest"`
 	PolicyDigest      string    `json:"policy_digest"`
 	VerifierIdentity  string    `json:"verifier_identity"`
+	VerifierLayer     string    `json:"verifier_layer,omitempty"`
+	VerifierOrigin    string    `json:"verifier_origin,omitempty"`
+	VerificationPhase string    `json:"verification_phase,omitempty"`
 	ExecutionID       string    `json:"execution_id"`
 	StartedAt         time.Time `json:"started_at"`
 	FinishedAt        time.Time `json:"finished_at"`
@@ -43,6 +46,30 @@ type EvidenceEnvelope struct {
 	ResultDigest      string    `json:"result_digest"`
 	Output            string    `json:"output,omitempty"`
 	TimedOut          bool      `json:"timed_out,omitempty"`
+}
+
+type VerifierCoverage struct {
+	CheckID    string `json:"check_id"`
+	Phase      string `json:"phase"`
+	Layer      string `json:"layer"`
+	Origin     string `json:"origin"`
+	EvidenceID string `json:"evidence_id,omitempty"`
+	Status     string `json:"status"`
+}
+
+type VerificationCoverage struct {
+	Observation       string             `json:"observation"`
+	IntegrityControls []string           `json:"integrity_controls"`
+	Verifiers         []VerifierCoverage `json:"verifiers"`
+	Uncovered         []string           `json:"uncovered"`
+}
+
+type LivenessImpact struct {
+	CandidatesEvaluated int    `json:"candidates_evaluated"`
+	CandidatesRejected  int    `json:"candidates_rejected"`
+	CheckpointsVerified int    `json:"checkpoints_verified"`
+	Recovered           bool   `json:"recovered"`
+	SelectionReason     string `json:"selection_reason,omitempty"`
 }
 
 type VerifiedCheckpoint struct {
@@ -56,25 +83,27 @@ type VerifiedCheckpoint struct {
 }
 
 type CompletionReceipt struct {
-	ReceiptVersion     string    `json:"receipt_version"`
-	ReceiptID          string    `json:"receipt_id"`
-	TaskID             string    `json:"task_id"`
-	Verdict            Verdict   `json:"verdict"`
-	RuleID             string    `json:"rule_id,omitempty"`
-	EnforcementMode    string    `json:"enforcement_mode"`
-	Disposition        string    `json:"disposition"`
-	CheckpointID       string    `json:"checkpoint_id,omitempty"`
-	TreeSHA256         string    `json:"tree_sha256,omitempty"`
-	CompletionEvidence []string  `json:"completion_evidence,omitempty"`
-	PolicyDigest       string    `json:"policy_digest"`
-	IssuedBy           string    `json:"issued_by"`
-	IssuedAt           time.Time `json:"issued_at"`
-	ResidualRisks      []string  `json:"residual_risks"`
-	Reason             string    `json:"reason,omitempty"`
-	TerminalCandidate  string    `json:"terminal_candidate,omitempty"`
-	SelectionReason    string    `json:"selection_reason,omitempty"`
-	Recovered          bool      `json:"recovered,omitempty"`
-	ReceiptDigest      string    `json:"receipt_digest"`
+	ReceiptVersion       string                `json:"receipt_version"`
+	ReceiptID            string                `json:"receipt_id"`
+	TaskID               string                `json:"task_id"`
+	Verdict              Verdict               `json:"verdict"`
+	RuleID               string                `json:"rule_id,omitempty"`
+	EnforcementMode      string                `json:"enforcement_mode"`
+	Disposition          string                `json:"disposition"`
+	CheckpointID         string                `json:"checkpoint_id,omitempty"`
+	TreeSHA256           string                `json:"tree_sha256,omitempty"`
+	CompletionEvidence   []string              `json:"completion_evidence,omitempty"`
+	PolicyDigest         string                `json:"policy_digest"`
+	IssuedBy             string                `json:"issued_by"`
+	IssuedAt             time.Time             `json:"issued_at"`
+	ResidualRisks        []string              `json:"residual_risks"`
+	Reason               string                `json:"reason,omitempty"`
+	TerminalCandidate    string                `json:"terminal_candidate,omitempty"`
+	SelectionReason      string                `json:"selection_reason,omitempty"`
+	Recovered            bool                  `json:"recovered,omitempty"`
+	VerificationCoverage *VerificationCoverage `json:"verification_coverage,omitempty"`
+	LivenessImpact       *LivenessImpact       `json:"liveness_impact,omitempty"`
+	ReceiptDigest        string                `json:"receipt_digest"`
 }
 
 type Event struct {
@@ -88,26 +117,29 @@ type Event struct {
 }
 
 type TaskState struct {
-	Version       string              `json:"version"`
-	TaskID        string              `json:"task_id"`
-	Goal          string              `json:"goal,omitempty"`
-	RepoRoot      string              `json:"repo_root"`
-	BaseCommit    string              `json:"base_commit"`
-	ProposalPath  string              `json:"proposal_path,omitempty"`
-	Mode          string              `json:"mode"`
-	Status        string              `json:"status"`
-	RuleID        string              `json:"rule_id,omitempty"`
-	Disposition   string              `json:"disposition,omitempty"`
-	Coverage      string              `json:"checkpoint_coverage"`
-	Candidate     *CandidateState     `json:"candidate,omitempty"`
-	Checkpoint    *VerifiedCheckpoint `json:"checkpoint,omitempty"`
-	Receipt       *CompletionReceipt  `json:"receipt,omitempty"`
-	Evidence      []EvidenceEnvelope  `json:"evidence,omitempty"`
-	LastError     string              `json:"last_error,omitempty"`
-	Freshness     string              `json:"freshness,omitempty"`
-	StaleReason   string              `json:"stale_reason,omitempty"`
-	AppliedCommit string              `json:"applied_commit,omitempty"`
-	AppliedBranch string              `json:"applied_branch,omitempty"`
-	AppliedAt     time.Time           `json:"applied_at,omitempty"`
-	UpdatedAt     time.Time           `json:"updated_at"`
+	Version             string              `json:"version"`
+	TaskID              string              `json:"task_id"`
+	Goal                string              `json:"goal,omitempty"`
+	RepoRoot            string              `json:"repo_root"`
+	BaseCommit          string              `json:"base_commit"`
+	ProposalPath        string              `json:"proposal_path,omitempty"`
+	Mode                string              `json:"mode"`
+	Status              string              `json:"status"`
+	RuleID              string              `json:"rule_id,omitempty"`
+	Disposition         string              `json:"disposition,omitempty"`
+	Coverage            string              `json:"checkpoint_coverage"`
+	CandidatesEvaluated int                 `json:"candidates_evaluated,omitempty"`
+	CandidatesRejected  int                 `json:"candidates_rejected,omitempty"`
+	CheckpointsVerified int                 `json:"checkpoints_verified,omitempty"`
+	Candidate           *CandidateState     `json:"candidate,omitempty"`
+	Checkpoint          *VerifiedCheckpoint `json:"checkpoint,omitempty"`
+	Receipt             *CompletionReceipt  `json:"receipt,omitempty"`
+	Evidence            []EvidenceEnvelope  `json:"evidence,omitempty"`
+	LastError           string              `json:"last_error,omitempty"`
+	Freshness           string              `json:"freshness,omitempty"`
+	StaleReason         string              `json:"stale_reason,omitempty"`
+	AppliedCommit       string              `json:"applied_commit,omitempty"`
+	AppliedBranch       string              `json:"applied_branch,omitempty"`
+	AppliedAt           time.Time           `json:"applied_at,omitempty"`
+	UpdatedAt           time.Time           `json:"updated_at"`
 }

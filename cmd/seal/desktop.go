@@ -16,18 +16,20 @@ import (
 )
 
 type desktopCommandResult struct {
-	SessionID     string           `json:"session_id,omitempty"`
-	Stage         string           `json:"stage"`
-	Verdict       protocol.Verdict `json:"verdict,omitempty"`
-	TaskID        string           `json:"task_id,omitempty"`
-	ReceiptID     string           `json:"receipt_id,omitempty"`
-	ChangedFiles  int              `json:"changed_files,omitempty"`
-	ChecksPassed  int              `json:"checks_passed,omitempty"`
-	Coverage      string           `json:"coverage,omitempty"`
-	Branch        string           `json:"branch,omitempty"`
-	Reason        string           `json:"reason,omitempty"`
-	ResidualRisks []string         `json:"residual_risks,omitempty"`
-	NextAction    string           `json:"next_action"`
+	SessionID            string                         `json:"session_id,omitempty"`
+	Stage                string                         `json:"stage"`
+	Verdict              protocol.Verdict               `json:"verdict,omitempty"`
+	TaskID               string                         `json:"task_id,omitempty"`
+	ReceiptID            string                         `json:"receipt_id,omitempty"`
+	ChangedFiles         int                            `json:"changed_files,omitempty"`
+	ChecksPassed         int                            `json:"checks_passed,omitempty"`
+	Coverage             string                         `json:"coverage,omitempty"`
+	Branch               string                         `json:"branch,omitempty"`
+	Reason               string                         `json:"reason,omitempty"`
+	ResidualRisks        []string                       `json:"residual_risks,omitempty"`
+	VerificationCoverage *protocol.VerificationCoverage `json:"verification_coverage,omitempty"`
+	LivenessImpact       *protocol.LivenessImpact       `json:"liveness_impact,omitempty"`
+	NextAction           string                         `json:"next_action"`
 }
 
 func desktopCmd() *cobra.Command {
@@ -159,7 +161,8 @@ completed:
 		SessionID: session.SessionID, Stage: session.Stage, Verdict: result.Verdict,
 		TaskID: result.TaskID, ReceiptID: result.ReceiptID, ChangedFiles: result.ChangedFiles,
 		ChecksPassed: result.ChecksPassed, Coverage: result.Coverage, Reason: result.Reason,
-		ResidualRisks: result.ResidualRisk, NextAction: next,
+		ResidualRisks: result.ResidualRisk, VerificationCoverage: result.VerificationCoverage,
+		LivenessImpact: result.LivenessImpact, NextAction: next,
 	}, nil
 }
 

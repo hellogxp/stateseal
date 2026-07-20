@@ -21,10 +21,14 @@ import (
 const maxCapturedOutput = 64 * 1024
 
 func Run(root, candidateID, treeHash, policyHash string, checks []config.Check) ([]protocol.EvidenceEnvelope, error) {
-	return RunWithBudget(root, candidateID, treeHash, policyHash, checks, 0)
+	return RunPhaseWithBudget(root, candidateID, treeHash, policyHash, checks, "verification", 0)
 }
 
 func RunWithBudget(root, candidateID, treeHash, policyHash string, checks []config.Check, totalTimeout time.Duration) ([]protocol.EvidenceEnvelope, error) {
+	return RunPhaseWithBudget(root, candidateID, treeHash, policyHash, checks, "verification", totalTimeout)
+}
+
+func RunPhaseWithBudget(root, candidateID, treeHash, policyHash string, checks []config.Check, phase string, totalTimeout time.Duration) ([]protocol.EvidenceEnvelope, error) {
 	result := make([]protocol.EvidenceEnvelope, 0, len(checks))
 	started := time.Now()
 	for _, check := range checks {
@@ -34,6 +38,7 @@ func RunWithBudget(root, candidateID, treeHash, policyHash string, checks []conf
 			if remaining <= 0 {
 				_, cwdIdentity, _ := resolveWorkingDir(root, check.CWD)
 				evidence := envelope(check, candidateID, treeHash, policyHash, cwdIdentity, time.Now().UTC(), 124, "verification suite wall budget exhausted", true)
+				evidence.VerificationPhase = phase
 				result = append(result, evidence)
 				return result, nil
 			}
@@ -42,6 +47,7 @@ func RunWithBudget(root, candidateID, treeHash, policyHash string, checks []conf
 			}
 		}
 		evidence, err := runOne(root, candidateID, treeHash, policyHash, check, timeout)
+		evidence.VerificationPhase = phase
 		result = append(result, evidence)
 		if err != nil {
 			return result, err
@@ -111,6 +117,7 @@ func envelope(check config.Check, candidateID, treeHash, policyHash, cwdIdentity
 		SuiteSHA256: suiteHash, CommandDigest: commandHash, CWDigest: cwdHash,
 		EnvironmentDigest: envHash, PolicyDigest: policyHash,
 		VerifierIdentity: "command/" + check.ID + "@v1", ExecutionID: identity.ID("exec"),
+		VerifierLayer: check.CoverageLayer(), VerifierOrigin: check.Provenance(),
 		StartedAt: started, FinishedAt: time.Now().UTC(), ExitCode: exit,
 		ResultDigest: identity.Digest(raw), Output: strings.TrimSpace(output), TimedOut: timedOut,
 	}

@@ -8,6 +8,13 @@ the version fields in its JSON schemas.
 
 ### Added
 
+- Receipt-level verification coverage with L0 integrity controls, L1–L3
+  verifier layers, check provenance, uncovered risks, and delivery-impact
+  counters that separate safe blocking from useful delivery.
+- An explicit research-evidence boundary and verifier model that treats
+  automatic discovery as a minimum L1 contract rather than a complete
+  specification.
+
 - Transactional admission CLI and external broker.
 - State-bound evidence, verified checkpoints, and fresh completion recertification.
 - Recovery of the last verified checkpoint after terminal regression.

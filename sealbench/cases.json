@@ -27,6 +27,13 @@
     {"id":"SB024","name":"managed-agent-cache","expected":"writable-outside-candidate"},
     {"id":"SB025","name":"no-progress-escalation","expected":"ESCALATED"},
     {"id":"SB026","name":"user-integration-mutation-safety","expected":"unrelated-config-preserved"},
-    {"id":"SB027","name":"codex-desktop-controlled-delivery","expected":"verified-before-user-accepted-apply"}
+    {"id":"SB027","name":"codex-desktop-controlled-delivery","expected":"verified-before-user-accepted-apply"},
+    {"id":"SB028","name":"safe-by-abstention","expected":"blocked-with-zero-useful-checkpoint"},
+    {"id":"SB029","name":"sound-candidate-false-rejection","expected":"rejection-cost-reported"},
+    {"id":"SB030","name":"weak-verifier-false-pass","expected":"admitted-with-explicit-boundary"},
+    {"id":"SB031","name":"gate-error-propagation","expected":"completion-failure-not-admitted"},
+    {"id":"SB032","name":"unapproved-interface-mutation","expected":"fail-closed-without-project-change"},
+    {"id":"SB033","name":"loop-depth-without-progress","expected":"bounded-escalation"},
+    {"id":"SB034","name":"coverage-collapse-disclosure","expected":"uncovered-layers-reported"}
   ]
 }
