@@ -294,6 +294,21 @@ func TestAgentLaunchUsesSafeDefaults(t *testing.T) {
 	}
 }
 
+func TestManagedCodexChildIgnoresOuterDesktopRouting(t *testing.T) {
+	args, err := agentLaunch("codex", "implement validation", false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args = isolateManagedChild("codex", args)
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--ignore-user-config") {
+		t.Fatalf("managed Codex child still loads outer MCP configuration: %v", args)
+	}
+	if !strings.Contains(args[len(args)-1], "do not call StateSeal MCP tools") {
+		t.Fatalf("managed prompt omitted the direct-edit child boundary: %q", args[len(args)-1])
+	}
+}
+
 func TestSingleGoalRunBootstrapsVerifiesAndApplies(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("LC_ALL", "zh_CN.UTF-8")
@@ -335,7 +350,7 @@ func TestSingleGoalRunBootstrapsVerifiesAndApplies(t *testing.T) {
 			t.Fatalf("compact Chinese experience missing %q:\n%s", want, out.String())
 		}
 	}
-	for _, hidden := range []string{"Proposal:", "Receipt:", "Checkpoint candidate state"} {
+	for _, hidden := range []string{"Proposal:", "Checkpoint candidate state"} {
 		if strings.Contains(out.String(), hidden) {
 			t.Fatalf("ordinary experience exposed internal detail %q:\n%s", hidden, out.String())
 		}
@@ -347,6 +362,47 @@ func TestSingleGoalRunBootstrapsVerifiesAndApplies(t *testing.T) {
 	branch, err := identity.Git(root, "branch", "--show-current")
 	if err != nil || !strings.HasPrefix(strings.TrimSpace(string(branch)), "feature/") {
 		t.Fatalf("mainline delivery did not create a feature branch: %q %v", branch, err)
+	}
+}
+
+func TestDevelopmentRunRejectsEmptyDeliverable(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	identity.Git(root, "config", "user.name", "Test User")
+	identity.Git(root, "config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(root, "app.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	identity.Git(root, "add", "app.txt")
+	identity.Git(root, "commit", "-m", "chore: initialize fixture")
+	binDir := t.TempDir()
+	fakeCodex := filepath.Join(binDir, "codex")
+	if err := os.WriteFile(fakeCodex, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Chdir(root)
+
+	cmd := newRoot()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"run", "--agent", "codex", "--yes", "--no-apply", "--require-change", "Add a deliverable code change"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatalf("empty development candidate was admitted:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "no deliverable change") || !strings.Contains(out.String(), "REJECTED") && !strings.Contains(out.String(), "Delivery requirements were not met") {
+		t.Fatalf("empty candidate rejection was not explained professionally:\n%s", out.String())
+	}
+	state, _, err := loadState()
+	if err != nil || state.Status != string(protocol.VerdictRejected) || state.RuleID != protocol.RuleNoDeliverableChange || state.Checkpoint != nil || state.Receipt == nil || state.Receipt.Verdict != protocol.VerdictRejected {
+		t.Fatalf("empty candidate did not produce the stable LC004 authority decision: state=%+v err=%v", state, err)
+	}
+	if status, _ := identity.Git(root, "status", "--porcelain"); strings.TrimSpace(string(status)) != "" {
+		t.Fatalf("empty rejected delivery changed the source workspace: %s", status)
 	}
 }
 

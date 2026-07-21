@@ -13,21 +13,25 @@ flowchart TD
     B --> C["Open a Git project<br/>in the existing Agent"]
     C --> D["First project use<br/>review verification contract once"]
     D --> E["Describe the development goal"]
-    E --> F["Agent analyzes, edits, and self-tests"]
-    F --> G["StateSeal captures a candidate boundary"]
+    E --> F["StateSeal starts isolated delivery<br/>and blocks recursive routing"]
+    F --> F2["Agent analyzes, edits, and self-tests<br/>meaningful progress remains visible"]
+    F2 --> G["StateSeal captures a non-empty candidate boundary"]
     G --> H["Independent admission and completion checks"]
     H -->|rejected| I["Return evidence<br/>continue the Agent loop"]
-    I --> F
+    I --> F2
     H -->|admitted| J["Bind receipt to exact code state"]
     J --> K["User accepts and applies verified code"]
 ```
 
 The portable authoritative path starts the controlled task with `seal run`.
 Codex Desktop uses MCP to route an ordinary code-changing prompt into that same
-path. Native tool approval gates the one-time project contract and final apply;
-no prompt prefix or hook-trust command is required. It remains experimental
-until pinned live Desktop conformance. Other Desktop/IDE adapters currently
-provide the lifecycle foundation only.
+path; read-only work remains outside the delivery state machine. Server-initiated
+native confirmation gates the one-time project contract and final apply. MCP
+routing remains Agent-mediated, while all boundaries after `start_delivery` are
+enforced by StateSeal. No prompt prefix or hook-trust command is required. The
+surface remains experimental until the repaired path passes pinned live Desktop
+conformance. Other Desktop/IDE adapters currently provide the lifecycle
+foundation only.
 
 ## Product architecture
 
@@ -104,7 +108,7 @@ verifier's layer, origin, evidence and status, plus declared uncovered risks.
 | Verification coverage, provenance and delivery-impact reporting | Implemented; product outcome baselines pending |
 | User-level Codex/Claude/Qoder integration management | Implemented; Desktop/IDE level remains experimental |
 | Qoder project adapter | Deterministic contract tests implemented; live validation pending |
-| Codex Desktop managed delivery | MCP initialize/tool handshake and deterministic exact-receipt delivery pass; pinned live Desktop conformance pending |
+| Codex Desktop managed delivery | Recursive child and empty-candidate failure injections pass; native confirmation and exact-branch binding implemented; pinned live rerun pending |
 | Claude Code, Qoder, Cursor live compatibility | Pending pinned-version validation |
 | StateSeal Desktop application | Explicitly out of scope |
 | Cloud dashboard and multi-Agent orchestration | Deferred |
@@ -113,8 +117,9 @@ verifier's layer, origin, evidence and status, plus declared uncovered risks.
 
 | Priority | Outcome | Exit evidence |
 | --- | --- | --- |
-| P0 | Reliable core and honest result model | Go race tests, 34-case SealBench, receipt-schema compatibility |
+| P0 | Reliable core and honest result model | Go race tests, 35-case SealBench, receipt-schema compatibility |
 | P0 | Portable CLI experience | one goal command, useful progress, one final apply decision, stack fixtures |
+| P0 | Desktop delivery integrity | no recursive routing, no empty admission, native enable/apply confirmation, truthful branch state, pinned live run |
 | P1 | Mainstream Agent conformance | pinned live CLI/Desktop evidence with downgrade on capability loss |
 | P1 | L2/L3 verifier integration | domain profiles, protected CI/runner evidence and explicit authority |
 | P1 | Product outcome evaluation | false-reject, abstention, useful-delivery and overhead baselines |

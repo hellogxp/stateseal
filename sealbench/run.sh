@@ -505,5 +505,24 @@ commit_policy "$repo"
 ' >/dev/null)
 pass SB034 coverage-collapse-disclosure
 
-test "$PASSED" -eq 34
-printf 'SealBench passed %d/34 deterministic failure-injection cases.\n' "$PASSED"
+# SB035: a code-changing contract cannot be satisfied by replaying the trusted base.
+repo=$(new_repo sb035)
+write_policy "$repo" sb035 true true
+commit_policy "$repo"
+(cd "$repo" && expect_code 1 "$SEAL" run --require-change -- sh -c ':')
+(cd "$repo" && {
+  status_json=$("$SEAL" status --json)
+  jq -e '
+    .status == "REJECTED" and .rule_id == "LC004" and
+    .receipt.verdict == "REJECTED" and
+    .receipt.rule_id == "LC004"
+  ' >/dev/null <<<"$status_json" || {
+    printf 'SB035 unexpected authority state: %s\n' "$status_json" >&2
+    false
+  }
+})
+test "$(git -C "$repo" status --porcelain)" = ""
+pass SB035 empty-development-candidate
+
+test "$PASSED" -eq 35
+printf 'SealBench passed %d/35 deterministic failure-injection cases.\n' "$PASSED"

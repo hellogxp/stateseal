@@ -40,8 +40,9 @@ The v0alpha1 case catalog is:
 | SB032 | First use lacks native/non-interactive approval | fail closed without mutating the project |
 | SB033 | Additional loop attempts oscillate without progress | bounded `ESCALATED` result |
 | SB034 | Only a minimum L1 gate is configured | missing L2/L3 coverage remains explicit |
+| SB035 | A code-changing task returns the trusted base unchanged | reject the empty candidate under `LC004` |
 
-`run.sh` executes all 34 cases with exact verdict, state, evidence, freshness,
+`run.sh` executes all 35 cases with exact verdict, state, evidence, freshness,
 process-lifecycle, cross-agent adapter, MCP, mode, cache-isolation, configuration
 mutation, recovery, coverage, provenance, false-rejection, and liveness
 assertions. `stacks.sh` adds managed Go, Python, and Node

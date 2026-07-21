@@ -19,6 +19,7 @@ const (
 	RuleWallBudgetExhausted      = "LC001"
 	RuleCandidateBudgetExhausted = "LC002"
 	RuleNoProgress               = "LC003"
+	RuleNoDeliverableChange      = "LC004"
 	RuleAgentExited              = "EX001"
 )
 
@@ -39,6 +40,7 @@ var ruleSummaries = map[string]string{
 	RuleWallBudgetExhausted:      "agent wall-time budget was exhausted",
 	RuleCandidateBudgetExhausted: "candidate budget was exhausted",
 	RuleNoProgress:               "agent repeated or oscillated without making progress",
+	RuleNoDeliverableChange:      "development task produced no deliverable change",
 	RuleAgentExited:              "agent process exited with an error",
 }
 

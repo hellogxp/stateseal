@@ -25,7 +25,7 @@ func TestRunProgressShowsPlanAndHeartbeat(t *testing.T) {
 	time.Sleep(15 * time.Millisecond)
 	progress.StopAgentHeartbeat()
 
-	for _, want := range []string{"执行计划", "go test ./...", "Codex 已启动", "Codex 工作中", "等待下一个候选"} {
+	for _, want := range []string{"执行计划", "go test ./...", "Codex 已启动", "Codex 正在分析项目", "尚未产生代码变更"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("progress output missing %q:\n%s", want, out.String())
 		}

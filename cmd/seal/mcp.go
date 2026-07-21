@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/hellogxp/stateseal/internal/buildinfo"
 	"github.com/hellogxp/stateseal/internal/config"
 	"github.com/hellogxp/stateseal/internal/i18n"
@@ -21,7 +22,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const stateSealMCPInstructions = "StateSeal is the verified-delivery authority for code-changing work in local Git projects. For any request that may modify code, call inspect_project before editing. If the project is enabled, call start_delivery and do not edit the source workspace directly. If it is not enabled, present the returned verification contract and call enable_project only after user approval. Present the receipt and residual risks before calling apply_verified. Never claim StateSeal verification without an admitted receipt."
+const stateSealMCPInstructions = "StateSeal is the verified-delivery authority for code-changing work in local Git projects. Use it for implementation, fixes, refactors, migrations, generated code, and tests; do not invoke it for explanation, search, planning, or other read-only work. For a code-changing request, call inspect_project before editing. If the project is enabled, call start_delivery and never edit the source workspace directly. If it is not enabled, present the concise verification contract and call enable_project; StateSeal itself elicits the user's native confirmation. After delivery, present changed files, checks, durations, exact code state, coverage, receipt, and residual risks. Then call apply_verified; StateSeal itself elicits a separate final acceptance. Never claim StateSeal verification without an admitted non-empty receipt, and never bypass a failed or rejected StateSeal delivery by editing the source workspace."
 
 type mcpProjectInput struct {
 	RepoPath string `json:"repo_path" jsonschema:"absolute path to the Git project currently open in the Agent desktop"`
@@ -95,6 +96,9 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 		Name: "stateseal", Title: "StateSeal Verified Delivery", Version: info.Version,
 		WebsiteURL: "https://github.com/hellogxp/stateseal",
 	}, &mcp.ServerOptions{Instructions: stateSealMCPInstructions})
+	if os.Getenv("STATESEAL_DESKTOP_MCP_CHILD") == "1" {
+		return server
+	}
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "inspect_project", Title: "Inspect StateSeal project policy",
@@ -109,8 +113,21 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 		Name: "enable_project", Title: "Enable StateSeal for this project",
 		Description: "Enable the exact verification contract previously returned by inspect_project. This is a one-time project change and must be shown through the Agent's native approval UI before execution.",
 		Annotations: mcpAnnotations(false, false, true, false),
-	}, func(_ context.Context, _ *mcp.CallToolRequest, input mcpEnableProjectInput) (*mcp.CallToolResult, mcpProjectInspection, error) {
-		inspection, err := enableMCPProject(input.RepoPath, input.SetupToken, agent)
+	}, func(ctx context.Context, req *mcp.CallToolRequest, input mcpEnableProjectInput) (*mcp.CallToolResult, mcpProjectInspection, error) {
+		inspection, err := inspectMCPProject(input.RepoPath, agent)
+		if err != nil {
+			return nil, mcpProjectInspection{}, err
+		}
+		if !inspection.Enabled {
+			locale := i18n.Detect()
+			message := integrationText(locale,
+				fmt.Sprintf("Enable StateSeal for %s? Admission: %s. Completion: %s. Policy: %s.", inspection.Project, strings.Join(inspection.Admission, "; "), strings.Join(inspection.Completion, "; "), inspection.PolicyDigest),
+				fmt.Sprintf("是否为项目 %s 启用 StateSeal 受控交付？Admission：%s。Completion：%s。策略：%s。", inspection.Project, strings.Join(inspection.Admission, "；"), strings.Join(inspection.Completion, "；"), inspection.PolicyDigest))
+			if err := elicitMCPConfirmation(ctx, req, message); err != nil {
+				return nil, mcpProjectInspection{}, err
+			}
+		}
+		inspection, err = enableMCPProject(input.RepoPath, input.SetupToken, agent)
 		return nil, inspection, err
 	})
 
@@ -136,7 +153,17 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 		Name: "apply_verified", Title: "Apply the verified checkpoint",
 		Description: "Apply only the exact admitted checkpoint bound to the supplied Desktop session and receipt. This modifies the user's Git branch and must always use the Agent's native approval UI.",
 		Annotations: mcpAnnotations(false, true, false, false),
-	}, func(_ context.Context, _ *mcp.CallToolRequest, input mcpApplyInput) (*mcp.CallToolResult, desktopCommandResult, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, input mcpApplyInput) (*mcp.CallToolResult, desktopCommandResult, error) {
+		if err := validateDesktopApplyRequest(input.SessionID, input.ReceiptID); err != nil {
+			return nil, desktopCommandResult{}, err
+		}
+		locale := i18n.Detect()
+		message := integrationText(locale,
+			fmt.Sprintf("Accept and apply StateSeal receipt %s to the project? Only the exact verified checkpoint will be applied.", input.ReceiptID),
+			fmt.Sprintf("是否接受并应用 StateSeal Receipt %s？只会应用与该凭证绑定的确切验证代码。", input.ReceiptID))
+		if err := elicitMCPConfirmation(ctx, req, message); err != nil {
+			return nil, desktopCommandResult{}, err
+		}
 		result, err := applyDesktopSession(input.SessionID, input.ReceiptID)
 		return nil, result, err
 	})
@@ -151,6 +178,34 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 	})
 
 	return server
+}
+
+func validateDesktopApplyRequest(sessionID, receiptID string) error {
+	session, err := store.LoadDesktopSession(sessionID)
+	if err != nil {
+		return err
+	}
+	if session.Stage != store.DesktopStagePendingApply || session.Verdict != string(protocol.VerdictAdmitted) {
+		return fmt.Errorf("Desktop session has no admitted checkpoint awaiting acceptance")
+	}
+	if receiptID == "" || receiptID != session.ReceiptID {
+		return fmt.Errorf("receipt %q does not match the admitted Desktop session", receiptID)
+	}
+	return nil
+}
+
+func elicitMCPConfirmation(ctx context.Context, req *mcp.CallToolRequest, message string) error {
+	result, err := req.Session.Elicit(ctx, &mcp.ElicitParams{
+		Mode: "form", Message: message,
+		RequestedSchema: &jsonschema.Schema{Type: "object"},
+	})
+	if err != nil {
+		return fmt.Errorf("native user confirmation is unavailable; no project state was changed: %w", err)
+	}
+	if result == nil || result.Action != "accept" {
+		return fmt.Errorf("user did not confirm the StateSeal action; no project state was changed")
+	}
+	return nil
 }
 
 func mcpAnnotations(readOnly, destructive, idempotent, openWorld bool) *mcp.ToolAnnotations {
@@ -349,11 +404,27 @@ func desktopSessionResult(sessionID string) (desktopCommandResult, error) {
 	if err != nil {
 		return desktopCommandResult{}, err
 	}
-	return desktopCommandResult{
+	result := desktopCommandResult{
 		SessionID: session.SessionID, Stage: session.Stage, Verdict: protocolVerdict(session.Verdict),
 		TaskID: session.TaskID, ReceiptID: session.ReceiptID, Reason: session.LastError,
 		NextAction: desktopSessionNextAction(session),
-	}, nil
+	}
+	if state, stateErr := loadDesktopTaskState(session); stateErr == nil {
+		result.Files = verifiedChangedFileNames(state)
+		result.ChangedFiles = len(result.Files)
+		result.Checks = desktopCheckResults(session.RepoRoot, state)
+		result.ChecksPassed = len(result.Checks)
+		result.CodeState = resultCodeState(state)
+		result.RuleID = resultRuleID(state)
+		result.Coverage = state.Coverage
+		result.Branch = state.AppliedBranch
+		if state.Receipt != nil {
+			result.ResidualRisks = append([]string(nil), state.Receipt.ResidualRisks...)
+			result.VerificationCoverage = state.Receipt.VerificationCoverage
+			result.LivenessImpact = state.Receipt.LivenessImpact
+		}
+	}
+	return result, nil
 }
 
 func protocolVerdict(value string) protocol.Verdict { return protocol.Verdict(value) }

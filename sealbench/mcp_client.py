@@ -39,6 +39,15 @@ def main() -> None:
                 error = process.stderr.read() if process.stderr is not None else ""
                 raise RuntimeError(f"MCP server stopped before response: {error}")
             message = json.loads(line)
+            if message.get("method") == "elicitation/create" and "id" in message:
+                send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": message["id"],
+                        "result": {"action": "accept", "content": {}},
+                    }
+                )
+                continue
             if message.get("id") == request_id:
                 return message
 
@@ -46,7 +55,7 @@ def main() -> None:
         "initialize",
         {
             "protocolVersion": "2025-03-26",
-            "capabilities": {},
+            "capabilities": {"elicitation": {"form": {}}},
             "clientInfo": {"name": "sealbench", "version": "1"},
         },
     )

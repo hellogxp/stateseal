@@ -98,7 +98,7 @@ func TestStateSealMCPServerAdvertisesRoutingAndApprovalBoundaries(t *testing.T) 
 	}
 	defer clientSession.Close()
 
-	if instructions := clientSession.InitializeResult().Instructions; !strings.Contains(instructions, "inspect_project") || !strings.Contains(instructions, "Never claim") {
+	if instructions := clientSession.InitializeResult().Instructions; !strings.Contains(instructions, "inspect_project") || !strings.Contains(instructions, "Never claim") || !strings.Contains(instructions, "read-only") || !strings.Contains(instructions, "never bypass") {
 		t.Fatalf("MCP routing instructions are incomplete: %s", instructions)
 	}
 	listed, err := clientSession.ListTools(ctx, nil)
@@ -124,6 +124,30 @@ func TestStateSealMCPServerAdvertisesRoutingAndApprovalBoundaries(t *testing.T) 
 		if !present {
 			t.Fatalf("MCP server is missing %s", name)
 		}
+	}
+}
+
+func TestManagedDesktopChildCannotRecursivelyInvokeStateSeal(t *testing.T) {
+	t.Setenv("STATESEAL_DESKTOP_MCP_CHILD", "1")
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := newStateSealMCPServer("codex").Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer serverSession.Close()
+	client := mcp.NewClient(&mcp.Implementation{Name: "stateseal-child-test", Version: "test"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+	listed, err := clientSession.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Tools) != 0 {
+		t.Fatalf("managed child inherited recursive StateSeal tools: %+v", listed.Tools)
 	}
 }
 
@@ -208,6 +232,66 @@ func TestMCPProjectEnablementBindsTheDisplayedPolicy(t *testing.T) {
 	}
 }
 
+func TestMCPProjectEnablementRequiresNativeUserConfirmation(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	identity.Git(root, "config", "user.name", "Test User")
+	identity.Git(root, "config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/native-confirmation\n\ngo 1.24\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	identity.Git(root, "add", "go.mod")
+	identity.Git(root, "commit", "-m", "chore: initialize fixture")
+
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := newStateSealMCPServer("codex").Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer serverSession.Close()
+	accept := false
+	client := mcp.NewClient(&mcp.Implementation{Name: "stateseal-confirm-test", Version: "test"}, &mcp.ClientOptions{
+		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			if accept {
+				return &mcp.ElicitResult{Action: "accept"}, nil
+			}
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+	inspection, err := inspectMCPProject(root, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	declined, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "enable_project", Arguments: map[string]any{
+		"repo_path": root, "setup_token": inspection.SetupToken,
+	}})
+	if err == nil && !declined.IsError {
+		t.Fatalf("enable_project ignored native user decline: %+v", declined)
+	}
+	if _, err := os.Stat(filepath.Join(root, "seal.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("declined enablement changed the project: %v", err)
+	}
+	accept = true
+	enabled, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "enable_project", Arguments: map[string]any{
+		"repo_path": root, "setup_token": inspection.SetupToken,
+	}})
+	if err != nil || enabled.IsError {
+		t.Fatalf("confirmed project enablement failed: err=%v result=%+v", err, enabled)
+	}
+	if _, err := os.Stat(filepath.Join(root, "seal.yaml")); err != nil {
+		t.Fatalf("confirmed enablement did not create policy: %v", err)
+	}
+}
+
 func TestMCPDeliveryLeavesSourceUntouchedUntilExactReceiptIsApproved(t *testing.T) {
 	stateHome := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateHome)
@@ -256,7 +340,15 @@ printf 'package delivery\n\nimport "testing"\n\nfunc TestMessage(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client := mcp.NewClient(&mcp.Implementation{Name: "stateseal-e2e", Version: "test"}, nil)
+	acceptApply := false
+	client := mcp.NewClient(&mcp.Implementation{Name: "stateseal-e2e", Version: "test"}, &mcp.ClientOptions{
+		ElicitationHandler: func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			if acceptApply {
+				return &mcp.ElicitResult{Action: "accept"}, nil
+			}
+			return &mcp.ElicitResult{Action: "decline"}, nil
+		},
+	})
 	serverCommand := exec.Command(sealBinary, "mcp", "serve", "--agent", "codex")
 	serverCommand.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"), "XDG_STATE_HOME="+stateHome)
 	clientSession, err := client.Connect(ctx, &mcp.CommandTransport{Command: serverCommand}, nil)
@@ -279,6 +371,9 @@ printf 'package delivery\n\nimport "testing"\n\nfunc TestMessage(t *testing.T) {
 	if delivery.Stage != store.DesktopStagePendingApply || delivery.ReceiptID == "" || delivery.Verdict != "ADMITTED" {
 		t.Fatalf("unexpected delivery result: %+v", delivery)
 	}
+	if delivery.ChangedFiles != 2 || len(delivery.Files) != 2 || len(delivery.Checks) == 0 || delivery.CodeState == "" || delivery.DurationMS <= 0 || len(delivery.Timeline) == 0 {
+		t.Fatalf("delivery omitted professional progress or evidence fields: %+v", delivery)
+	}
 	if _, err := os.Stat(filepath.Join(root, "message.go")); !os.IsNotExist(err) {
 		t.Fatalf("start_delivery modified the source workspace before approval: %v", err)
 	}
@@ -299,6 +394,19 @@ printf 'package delivery\n\nimport "testing"\n\nfunc TestMessage(t *testing.T) {
 		t.Fatalf("wrong receipt modified the source workspace: %v", err)
 	}
 
+	declined, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "apply_verified", Arguments: map[string]any{
+			"session_id": delivery.SessionID, "receipt_id": delivery.ReceiptID,
+		},
+	})
+	if err == nil && !declined.IsError {
+		t.Fatalf("apply_verified ignored the user's native decline: %+v", declined)
+	}
+	if _, err := os.Stat(filepath.Join(root, "message.go")); !os.IsNotExist(err) {
+		t.Fatalf("declined apply modified the source workspace: %v", err)
+	}
+
+	acceptApply = true
 	applied, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
 		Name: "apply_verified", Arguments: map[string]any{
 			"session_id": delivery.SessionID, "receipt_id": delivery.ReceiptID,

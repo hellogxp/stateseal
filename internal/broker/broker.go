@@ -35,6 +35,15 @@ func (b *Broker) RecordEscalation(reason string) (protocol.CompletionReceipt, er
 	return b.finish(protocol.VerdictEscalated, b.State.Checkpoint, nil, reason)
 }
 
+// RecordRejection converts a broker-level delivery obligation into a durable
+// rejection. It is used for constraints such as a code-changing task that
+// produced no deliverable change, which verifier success alone cannot prove.
+func (b *Broker) RecordRejection(reason string) (protocol.CompletionReceipt, error) {
+	b.State.CandidatesRejected++
+	b.State.Checkpoint = nil
+	return b.finish(protocol.VerdictRejected, nil, nil, reason)
+}
+
 func New(root, mode string) (*Broker, error) {
 	p, _, err := config.Load(root)
 	if err != nil {
@@ -503,6 +512,8 @@ func classifyRule(verdict protocol.Verdict, reason, selectionReason, terminalRea
 		return protocol.RuleCandidateBudgetExhausted
 	case strings.Contains(lower, "no progress") || strings.Contains(lower, "oscillat"):
 		return protocol.RuleNoProgress
+	case strings.Contains(lower, "no deliverable change") || strings.Contains(lower, "matches the trusted base"):
+		return protocol.RuleNoDeliverableChange
 	case strings.Contains(lower, "check failed") || strings.Contains(lower, "checks failed"):
 		return protocol.RuleVerifierFailed
 	case verdict == protocol.VerdictAbstained && reason != "":

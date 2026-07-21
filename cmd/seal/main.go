@@ -154,7 +154,7 @@ func verifyCmd() *cobra.Command {
 
 func runCmd() *cobra.Command {
 	var mode, source, agentName, goal, taskID, branch string
-	var apply, noApply, verbose, quiet, jsonOut, autonomous, yes bool
+	var apply, noApply, verbose, quiet, jsonOut, autonomous, yes, requireChange bool
 	cmd := &cobra.Command{Use: "run \"<goal>\"", Short: "Develop a goal with a coding Agent and deliver only verified changes", Args: cobra.ArbitraryArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		locale := i18n.Detect()
 		if mode != "shadow" && mode != "warn" && mode != "enforce" {
@@ -230,6 +230,9 @@ func runCmd() *cobra.Command {
 			agentArgs, err = agentLaunch(agentName, goal, autonomous, trustedHooks)
 			if err != nil {
 				return codedError{10, err}
+			}
+			if desktopMCPChild {
+				agentArgs = isolateManagedChild(agentName, agentArgs)
 			}
 			if taskID == "" {
 				taskID = newTaskID(goal, time.Now().UTC())
@@ -361,6 +364,12 @@ func runCmd() *cobra.Command {
 		if err != nil {
 			return codedError{11, err}
 		}
+		if requireChange && r.Verdict == protocol.VerdictAdmitted && verifiedChangedFiles(b.State) == 0 {
+			r, err = b.RecordRejection("development task produced no deliverable change; the candidate matches the trusted base")
+			if err != nil {
+				return codedError{11, err}
+			}
+		}
 		progress.FinalResult(r, b.Policy.Completion.Checks, b.State.Evidence, time.Since(finalStarted))
 		if loopResult.NoProgress && r.Verdict != protocol.VerdictAdmitted {
 			r, err = b.RecordEscalation(loopResult.Reason)
@@ -420,6 +429,7 @@ func runCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit a stable machine-readable result")
 	cmd.Flags().BoolVar(&autonomous, "autonomous", false, "allow non-interactive Agent permissions; StateSeal verification remains external")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "approve first-run project setup")
+	cmd.Flags().BoolVar(&requireChange, "require-change", false, "reject an otherwise valid run when it produces no deliverable code change")
 	cmd.Flags().StringVar(&agentName, "agent", "", "coding Agent to launch")
 	cmd.Flags().StringVar(&goal, "goal", "", "intended development outcome")
 	cmd.Flags().StringVar(&taskID, "task-id", "", "task identifier (generated from the goal by default)")
@@ -1068,7 +1078,7 @@ func loadState() (protocol.TaskState, *store.Store, error) {
 	state, err := s.Load()
 	if err == nil {
 		state.Freshness, state.StaleReason = stateFreshness(root, rawPolicyDigest(root), state)
-		if state.Freshness == "CURRENT" && state.Checkpoint != nil {
+		if state.Freshness == "CURRENT" && state.Checkpoint != nil && state.Receipt != nil && state.Receipt.Verdict == protocol.VerdictAdmitted {
 			head, headErr := identity.Git(root, "rev-parse", "HEAD")
 			if headErr == nil && strings.TrimSpace(string(head)) == state.Checkpoint.Commit {
 				state.Status = "APPLIED"
@@ -1266,6 +1276,15 @@ func printRunResult(w io.Writer, r protocol.CompletionReceipt, state protocol.Ta
 	printResultField(w, locale, locale.T(i18n.ChecksLabel), fmt.Sprint(checks))
 	printResultField(w, locale, locale.T(i18n.CoverageLabel), coverageLabel(state.Coverage, locale))
 	printResultField(w, locale, locale.T(i18n.DurationLabel), formatDuration(duration))
+	if len(verifiedChangedFileNames(state)) > 0 {
+		printResultField(w, locale, integrationText(locale, "Files", "文件"), compactFileList(verifiedChangedFileNames(state)))
+	}
+	if r.ReceiptID != "" {
+		printResultField(w, locale, integrationText(locale, "Receipt", "Receipt"), r.ReceiptID)
+	}
+	if r.TreeSHA256 != "" {
+		printResultField(w, locale, integrationText(locale, "Code state", "代码状态"), short(r.TreeSHA256))
+	}
 	if r.Reason != "" && r.Verdict != protocol.VerdictAdmitted {
 		printResultField(w, locale, locale.T(i18n.ReasonLabel), compactFailure(r.Reason))
 	}

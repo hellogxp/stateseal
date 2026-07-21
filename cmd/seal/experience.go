@@ -426,8 +426,21 @@ func managedPrompt(goal string) string {
 	return "You are working in a StateSeal-managed isolated proposal.\n\n" +
 		"Goal:\n" + strings.TrimSpace(goal) + "\n\n" +
 		"Implement the goal, run relevant tests, and keep existing behavior compatible. " +
+		"StateSeal is already managing this proposal: do not call StateSeal MCP tools, do not request project enablement, and edit this proposal directly. " +
 		"Do not modify seal.yaml or Agent lifecycle configuration. " +
 		"If StateSeal rejects completion, use its feedback and continue until the configured checks pass."
+}
+
+// isolateManagedChild prevents a StateSeal-launched Agent from inheriting the
+// outer Desktop routing integration. The server-side child guard provides a
+// second boundary for Agents that do not support an equivalent config switch.
+func isolateManagedChild(agent string, args []string) []string {
+	if agent != "codex" || len(args) < 2 {
+		return args
+	}
+	result := append([]string(nil), args[:len(args)-1]...)
+	result = append(result, "--ignore-user-config", args[len(args)-1])
+	return result
 }
 
 func newTaskID(goal string, now time.Time) string {

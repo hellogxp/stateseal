@@ -47,8 +47,11 @@ seal integrate uninstall qoder
 
 Installation alone is not proof of end-to-end compatibility. Codex Desktop now
 uses a local stdio MCP server with explicit tool schemas, routing instructions,
-native approval for project enablement and final apply, durable session state,
-isolated Agent execution, exact receipt binding, and recovery surfaces. It
+server-initiated native confirmation for project enablement and final apply,
+durable session state, isolated Agent execution, exact receipt binding, and
+recovery surfaces. The managed child drops outer user configuration and the MCP
+server exposes no recursive tools inside a child run. Development tasks reject
+empty candidates under `LC004`. It
 remains experimental until a pinned Desktop release passes a live compatibility
 run. Claude Code and Qoder still require equivalent Desktop MCP conformance
 before promotion.
@@ -59,6 +62,13 @@ binds the user's native approval to the exact displayed policy digest.
 `apply_verified` accepts only the session-bound admitted receipt. The MCP server
 returns structured progress and evidence, while internal `seal desktop`
 commands remain recovery surfaces rather than user workflow.
+
+MCP routing is host-Agent mediated: the instructions distinguish code-changing
+work from explanation, search, planning, and review-only work, but MCP alone is
+not a universal filesystem interception boundary. Once `start_delivery` begins,
+StateSeal owns the hard boundaries: isolated execution, non-empty delivery,
+external verification, exact receipt matching, native acceptance, and apply.
+Use `seal run` when the invocation itself must be an authoritative boundary.
 
 Use `seal adapter list` to inspect the built-in matrix and install only the
 agents used by the repository:

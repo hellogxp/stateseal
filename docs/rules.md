@@ -22,6 +22,7 @@ on `rule_id`.
 | Lifecycle | `LC001` | Agent wall-time budget was exhausted |
 | Lifecycle | `LC002` | Candidate budget was exhausted |
 | Lifecycle | `LC003` | Agent repeated or oscillated between rejected states without progress |
+| Lifecycle | `LC004` | A code-changing task produced no deliverable change |
 | Execution | `EX001` | Agent process exited with an error |
 
 An admitted terminal candidate normally has no rule ID. An admitted recovery

@@ -89,8 +89,24 @@ fresh terminal recertification. The user decides whether to apply an admitted
 checkpoint:
 
 ```text
+StateSeal · Controlled delivery
+
+[00:00] ✓ Project verification policy loaded
+[00:01] ✓ Isolated candidate workspace created
+[00:15] ● Agent is analyzing the project · no code change yet
+[00:45] ● Agent is implementing · 2 changed files
+[01:14] ◆ Candidate #1 received · 2 changed files
+[01:18] ✓ go test ./... · passed · 2.1s
+[01:19] ✓ go vet ./... · passed · 0.6s
+[01:23] ✓ Final code state matches verified evidence
+
 StateSeal · Delivery result
 ✓ Ready to deliver
+
+  Changed files: 2
+  Files: ulid.go, ulid_test.go
+  Receipt: rcpt_…
+  Code state: 230fe20ef22f
 
 Delivery evidence
   ✓ candidate produced in an isolated workspace
@@ -120,16 +136,20 @@ environment, open the Git repository, and describe the goal normally:
 Add input validation, preserve compatibility, and include tests
 ```
 
-The MCP server first inspects the project without changing it. On first use,
-Codex shows the detected admission checks, completion checks, protected paths,
-and residual risks, then opens its native approval UI for `enable_project`.
+The MCP server first inspects the project without changing it. Explanation,
+search, and planning remain outside controlled delivery. On the first
+code-changing task, Codex shows the detected admission checks, completion
+checks, protected paths, and residual risks; StateSeal then opens native
+confirmation for `enable_project`.
 StateSeal commits the approved contract as `seal.yaml`; it does not ask again
 unless that policy changes.
 
 The isolated child Agent then runs the same authoritative workflow as
 `seal run --no-apply --json`, while the source workspace remains unchanged.
-When verification succeeds, the conversation reports the exact receipt,
-coverage, checks, and residual risks. A second native approval gates
-`apply_verified`; the supplied session and receipt must exactly match the
-admitted checkpoint. Rejecting it leaves the branch unchanged. The user never
-needs to type a `StateSeal:` prefix or internal `seal desktop` command.
+When verification succeeds, the conversation reports the phase timeline,
+changed files, checks and durations, exact receipt and code state, coverage,
+and residual risks. StateSeal opens a second native confirmation before
+`apply_verified`; the supplied session and receipt must exactly match a
+non-empty admitted checkpoint. Rejecting it leaves the branch unchanged. The
+user never needs to type a `StateSeal:` prefix or internal `seal desktop`
+command.

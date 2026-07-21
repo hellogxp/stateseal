@@ -74,19 +74,22 @@ project, and describe the development goal normally:
 修复重复回调导致的重复扣款，并保持现有接口兼容
 ```
 
-The Desktop conversation detects the code-changing request through StateSeal's
-MCP routing instructions. On first use it shows the detected verification
-contract and opens the Agent's native approval for `enable_project`. It then
-delegates implementation to an isolated StateSeal-managed Codex process, shows
-the state-bound receipt and residual risks, and opens a second native approval
+The Desktop adapter routes code-changing requests through StateSeal's MCP
+contract while leaving read-only explanation, search, and planning alone. On
+first use it shows the detected verification contract; StateSeal itself opens
+the native confirmation for `enable_project`. It then delegates implementation
+to an isolated child that cannot recursively invoke StateSeal, rejects an empty
+development candidate even when existing tests pass, and returns a compact
+timeline plus structured evidence. StateSeal opens a separate native acceptance
 before `apply_verified` can change the user's branch.
 
 `seal integrate` non-destructively adds a user-level MCP server for Codex
 Desktop, keeps a safety backup, and removes only obsolete StateSeal Desktop
 hooks. Existing MCP servers, settings, and unrelated hooks are preserved. No
 `/hooks` command or `StateSeal:` prompt prefix is required. Codex Desktop
-controlled delivery passes the deterministic MCP end-to-end suite but remains
-experimental until a pinned Desktop release passes live conformance. CLI
+controlled delivery passes deterministic MCP contract tests but remains
+experimental until the repaired path passes a pinned live Desktop conformance
+run. CLI
 adapters continue to use lifecycle hooks for intermediate candidate coverage.
 
 On the first managed run in a repository, StateSeal shows the detected project
@@ -97,9 +100,11 @@ isolated proposal, evaluates the exact candidate in clean worktrees, and asks
 one final delivery question.
 StateSeal follows the operating system message locale automatically and falls
 back to English. Use `--agent`, `--apply`, or `--no-apply` when explicit control
-is needed. The default view reports real lifecycle events, check results, and
-durations; use `--verbose` for the Agent stream, `--quiet` for the final status
-only, or `--json` for automation. Your branch is unchanged until apply succeeds.
+is needed. The default view reports meaningful phase changes, changed files,
+candidate attempts, independent check results and durations. The delivery card
+adds the receipt, exact code state, coverage and residual risks; use `--verbose`
+for the Agent stream, `--quiet` for the final status only, or `--json` for
+automation. Your branch is unchanged until apply succeeds.
 
 See the [documentation index](docs/index.md) or
 [Getting started](docs/getting-started.md) for the complete installation,

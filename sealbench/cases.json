@@ -34,6 +34,7 @@
     {"id":"SB031","name":"gate-error-propagation","expected":"completion-failure-not-admitted"},
     {"id":"SB032","name":"unapproved-interface-mutation","expected":"fail-closed-without-project-change"},
     {"id":"SB033","name":"loop-depth-without-progress","expected":"bounded-escalation"},
-    {"id":"SB034","name":"coverage-collapse-disclosure","expected":"uncovered-layers-reported"}
+    {"id":"SB034","name":"coverage-collapse-disclosure","expected":"uncovered-layers-reported"},
+    {"id":"SB035","name":"empty-development-candidate","expected":"REJECTED-LC004"}
   ]
 }

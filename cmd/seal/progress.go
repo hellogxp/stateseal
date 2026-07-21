@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -111,10 +112,23 @@ func (p *runProgress) AgentStarted(agent, proposal, base string) {
 			case <-stop:
 				return
 			case <-ticker.C:
-				changed := changedFileCount(proposal, base)
+				files := workingChangedFiles(proposal, base)
+				changed := len(files)
 				p.mu.Lock()
+				previous := p.changed
 				p.changed = changed
-				p.writeLocked("agent_working", "●", p.locale.T(i18n.AgentHeartbeat, agent, changed))
+				message := p.locale.T(i18n.AgentHeartbeat, agent, changed)
+				phase := "agent_working"
+				if changed == 0 {
+					phase = "agent_analyzing"
+					message = integrationText(p.locale, agent+" is analyzing the project · no code change yet", agent+" 正在分析项目 · 尚未产生代码变更")
+				} else if changed != previous {
+					phase = "agent_implementing"
+					message = integrationText(p.locale,
+						fmt.Sprintf("%s is implementing · %d changed files · %s", agent, changed, compactFileList(files)),
+						fmt.Sprintf("%s 正在实现 · 已变更 %d 个文件 · %s", agent, changed, compactFileList(files)))
+				}
+				p.writeLocked(phase, "●", message)
 				p.mu.Unlock()
 			}
 		}
@@ -244,9 +258,6 @@ func (p *runProgress) publishLocked(phase, message string) {
 }
 
 func (p *runProgress) writeEvidenceLocked(receipt protocol.CompletionReceipt, checks []config.Check, evidence []protocol.EvidenceEnvelope) {
-	if !p.enabled {
-		return
-	}
 	byID := make(map[string]protocol.EvidenceEnvelope, len(evidence))
 	for _, item := range evidence {
 		byID[item.EvidenceID] = item
@@ -260,11 +271,19 @@ func (p *runProgress) writeEvidenceLocked(receipt protocol.CompletionReceipt, ch
 		if index < len(checks) {
 			name = shellJoin(checks[index].Command)
 		}
-		fmt.Fprintf(p.w, "         ✓ %s · %s\n", name, formatDuration(item.FinishedAt.Sub(item.StartedAt)))
+		duration := formatDuration(item.FinishedAt.Sub(item.StartedAt))
+		p.publishLocked("check_passed", integrationText(p.locale, name+" passed · "+duration, name+" 通过 · "+duration))
+		if p.enabled {
+			fmt.Fprintf(p.w, "         ✓ %s · %s\n", name, duration)
+		}
 	}
 }
 
 func changedFileCount(root, base string) int {
+	return len(workingChangedFiles(root, base))
+}
+
+func workingChangedFiles(root, base string) []string {
 	files := map[string]bool{}
 	if out, err := identity.Git(root, "diff", "--name-only", base); err == nil {
 		for _, file := range strings.Fields(string(out)) {
@@ -276,7 +295,27 @@ func changedFileCount(root, base string) int {
 			files[file] = true
 		}
 	}
-	return len(files)
+	result := make([]string, 0, len(files))
+	for file := range files {
+		result = append(result, file)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func compactFileList(files []string) string {
+	if len(files) == 0 {
+		return ""
+	}
+	limit := len(files)
+	if limit > 3 {
+		limit = 3
+	}
+	result := strings.Join(files[:limit], ", ")
+	if len(files) > limit {
+		result += fmt.Sprintf(" +%d", len(files)-limit)
+	}
+	return result
 }
 
 func compactFailure(reason string) string {
