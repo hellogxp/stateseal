@@ -3,6 +3,7 @@ package identity
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +48,38 @@ func TestUnsafeSymlinksFindsRepositoryEscape(t *testing.T) {
 	root := initRepo(t)
 	if err := os.Symlink("../outside", filepath.Join(root, "escape")); err != nil {
 		t.Fatal(err)
+	}
+	unsafe, err := UnsafeSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unsafe) != 1 || unsafe[0] != "escape" {
+		t.Fatalf("unexpected unsafe links: %v", unsafe)
+	}
+}
+
+func TestUnsafeSymlinksFindsMaterializedGitSymlinkEscape(t *testing.T) {
+	root := initRepo(t)
+	write(t, filepath.Join(root, "target"), "../outside")
+	object, err := Git(root, "hash-object", "-w", "target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Git(root, "update-index", "--add", "--cacheinfo", "120000,"+strings.TrimSpace(string(object))+",escape"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Git(root, "config", "core.symlinks", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Git(root, "checkout-index", "--force", "--", "escape"); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(filepath.Join(root, "escape"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Fatal("fixture must materialize the Git symlink as a regular file")
 	}
 	unsafe, err := UnsafeSymlinks(root)
 	if err != nil {

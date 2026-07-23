@@ -178,6 +178,10 @@ func UnsafeSymlinks(root string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	indexSymlinks, err := gitIndexSymlinks(root)
+	if err != nil {
+		return nil, err
+	}
 	cleanRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -192,12 +196,23 @@ func UnsafeSymlinks(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if info.Mode()&os.ModeSymlink == 0 {
+		isFilesystemSymlink := info.Mode()&os.ModeSymlink != 0
+		if !isFilesystemSymlink && !indexSymlinks[rel] {
 			continue
 		}
-		target, err := os.Readlink(path)
-		if err != nil {
-			return nil, err
+		var target string
+		if isFilesystemSymlink {
+			target, err = os.Readlink(path)
+		} else {
+			// Git materializes index mode 120000 as a regular file when
+			// core.symlinks=false. Its contents are still the link target and
+			// must be checked so a repository escape cannot become active on
+			// another checkout or host.
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return nil, readErr
+			}
+			target = string(data)
 		}
 		if !filepath.IsAbs(target) {
 			target = filepath.Join(filepath.Dir(path), target)
@@ -212,4 +227,29 @@ func UnsafeSymlinks(root string) ([]string, error) {
 		}
 	}
 	return unsafe, nil
+}
+
+func gitIndexSymlinks(root string) (map[string]bool, error) {
+	out, err := Git(root, "ls-files", "--stage", "-z")
+	if err != nil {
+		return nil, err
+	}
+	links := make(map[string]bool)
+	for _, entry := range strings.Split(string(out), "\x00") {
+		if entry == "" {
+			continue
+		}
+		metadata, path, ok := strings.Cut(entry, "\t")
+		if !ok {
+			return nil, fmt.Errorf("malformed git index entry")
+		}
+		mode, _, ok := strings.Cut(metadata, " ")
+		if !ok {
+			return nil, fmt.Errorf("malformed git index metadata for %q", path)
+		}
+		if mode == "120000" {
+			links[path] = true
+		}
+	}
+	return links, nil
 }

@@ -231,6 +231,10 @@ repo=$(new_repo sb013-symlink)
 write_policy "$repo" sb013-symlink true true
 commit_policy "$repo"
 (cd "$repo" && expect_code 1 "$SEAL" run -- sh -c 'ln -s ../outside escape')
+repo=$(new_repo sb013-materialized-symlink)
+write_policy "$repo" sb013-materialized-symlink true true
+commit_policy "$repo"
+(cd "$repo" && expect_code 1 "$SEAL" run -- sh -c 'printf ../outside > target; object=$(git hash-object -w target); git update-index --add --cacheinfo 120000,$object,escape; git config core.symlinks false; git checkout-index --force -- escape')
 pass SB013 protected-path-symlink-escape
 
 # SB014: malformed submission is recorded as abstention and cannot erase a checkpoint.
