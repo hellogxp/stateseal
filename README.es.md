@@ -15,6 +15,18 @@ StateSeal no es otro Coding Agent y no sustituye tus pruebas. Envuelve el agente
 y los comandos de verificación existentes para asegurar que el código entregado
 sea exactamente el código verificado.
 
+![Canal de entrega confiable de StateSeal](docs/assets/stateseal-trust-pipeline.svg)
+
+## Capacidades principales
+
+| Capacidad | Valor |
+| --- | --- |
+| Vinculación al estado exacto | Asocia cada resultado con el árbol de código que lo produjo |
+| Verificación independiente | Ejecuta la política en un evaluator limpio sin confiar en el autoinforme del agente |
+| Recuperación de checkpoints | Conserva el último estado confiable cuando un candidato posterior introduce una regresión |
+| Admisión externa | El Broker decide con base en evidencia, cobertura y política |
+| Recibos auditables | Registra procedencia, origen de evidencia y riesgo residual |
+
 ## Por qué
 
 Un agente de larga duración puede aprobar las pruebas, continuar editando,
@@ -40,6 +52,15 @@ seal ui
 Runs Console muestra las ejecuciones de todos los repositorios, el DAG de
 procedencia, la evidencia del verificador, la cronología confiable, la
 recuperación y los recibos. La UI es de solo lectura y solo escucha en loopback.
+
+![Runs Console de StateSeal](docs/assets/stateseal-runs-console.svg)
+
+## Integraciones y automatización
+
+StateSeal integra Codex Desktop, Codex CLI, Claude Code y Qoder. Cualquier otro
+agente de terminal puede usar el mismo protocolo mediante `seal run -- <command>`.
+La salida JSON, los identificadores de regla estables y los recibos sirven para
+CI y reproducción de investigación.
 
 ## Límite de confianza
 

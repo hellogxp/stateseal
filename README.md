@@ -18,6 +18,8 @@ entire trust model.
 
 StateSeal does not make Agents smarter. It makes their delivery verifiable.
 
+![StateSeal trusted delivery pipeline](docs/assets/stateseal-trust-pipeline.svg)
+
 ## Why
 
 A test pass is only meaningful for the state that was tested. Long-running coding agents can pass a suite, continue editing, regress the code, and still report success. A receipt can also be stale, copied from another tree, or edited after it was produced.
@@ -85,6 +87,8 @@ evidence, checkpoint recovery, the integrity-checked event timeline, and the
 completion receipt. It updates live, remains read-only, and listens only on a
 loopback address. Its interface is available in English, Simplified Chinese,
 Japanese, Korean, Spanish, Brazilian Portuguese, German, and French.
+
+![StateSeal Runs Console](docs/assets/stateseal-runs-console.svg)
 
 Or stay inside Codex Desktop after the one-time integration, open the Git
 project, and describe the development goal normally:

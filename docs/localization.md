@@ -23,6 +23,11 @@ guide, and Runs Console guide. Deeper protocol, threat-model, and research
 references currently use English as the canonical source unless the localized
 index explicitly links a maintained translation.
 
+Shared architecture and product visuals use stable protocol labels so every
+locale references the same reviewed artifact. Titles, alternative text,
+captions, and surrounding explanation remain localized. This avoids eight
+diagram copies drifting away from the implementation.
+
 ## Fallback
 
 The Runs Console applies this order:

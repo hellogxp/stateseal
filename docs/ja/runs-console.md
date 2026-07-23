@@ -2,6 +2,8 @@
 
 [English](../runs-console.md) | 日本語
 
+![StateSeal Runs Console](../assets/stateseal-runs-console.svg)
+
 `seal ui` は、外部 authority state を読み取り専用で可視化する StateSeal の
 ローカル観測画面です。
 

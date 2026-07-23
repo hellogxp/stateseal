@@ -13,6 +13,18 @@ StateSeal은 Coding Agent의 후보 코드를 정확한 코드 상태에 바인�
 StateSeal은 또 다른 Coding Agent가 아니며 테스트를 대체하지 않습니다. 기존 Agent와
 검증 명령을 감싸 최종 전달 코드가 실제로 검증된 코드인지 확인합니다.
 
+![StateSeal 신뢰 전달 파이프라인](docs/assets/stateseal-trust-pipeline.svg)
+
+## 핵심 기능
+
+| 기능 | 제공 가치 |
+| --- | --- |
+| 정확한 상태 바인딩 | 검증 결과를 해당 결과를 만든 코드 트리에 연결합니다 |
+| 독립 검증 | 깨끗한 evaluator에서 정책을 실행해 Agent의 자체 보고에 의존하지 않습니다 |
+| 체크포인트 복구 | 이후 후보가 회귀해도 마지막 신뢰 상태를 보존합니다 |
+| 외부 승인 | Broker가 증거, 범위, 정책을 바탕으로 최종 결정을 내립니다 |
+| 감사 가능한 영수증 | 이력, 증거 출처, 잔여 위험을 기록합니다 |
+
 ## 필요한 이유
 
 장시간 실행되는 Agent는 테스트 통과 후에도 편집을 계속해 회귀를 만들고 성공을
@@ -37,6 +49,14 @@ seal ui
 Runs Console은 모든 저장소의 실행 목록, 상태 출처 DAG, 검증 증거, 신뢰할 수 있는
 이벤트 타임라인, 체크포인트 복구 및 완료 영수증을 제공합니다. UI는 읽기 전용이며
 루프백 주소에서만 수신합니다.
+
+![StateSeal Runs Console](docs/assets/stateseal-runs-console.svg)
+
+## 통합 및 자동화
+
+Codex Desktop, Codex CLI, Claude Code 및 Qoder 통합을 제공합니다. 다른 터미널 Agent도
+`seal run -- <command>`로 동일한 프로토콜을 사용할 수 있습니다. JSON 출력, 안정적인
+규칙 ID와 완료 영수증은 CI와 연구 재현에도 활용할 수 있습니다.
 
 ## 신뢰 경계
 

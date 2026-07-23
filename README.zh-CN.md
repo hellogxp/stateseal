@@ -13,6 +13,18 @@ StateSeal 将 Coding Agent 产生的候选代码转换为与精确代码状态�
 StateSeal 不是另一个 Coding Agent，也不会替代测试。它包装现有 Agent 和验证命令，
 确保最终交付的代码正是经过验证的代码。
 
+![StateSeal 可信交付链路](docs/assets/stateseal-trust-pipeline.svg)
+
+## 核心能力
+
+| 能力 | 解决的问题 |
+| --- | --- |
+| 精确状态绑定 | 证明验证结果属于哪一个代码树，而不是“某次运行曾经通过” |
+| 独立验证 | 在干净 evaluator 中执行项目策略，避免 Agent 自报成功 |
+| 检查点恢复 | 后续候选回归时保留并重新认证最后一个可信状态 |
+| 外部准入 | Broker 根据证据、覆盖和策略决定最终处置 |
+| 可审计凭证 | 记录事件链、证据来源、覆盖范围和剩余风险 |
+
 ## 为什么需要 StateSeal
 
 长时间运行的 Agent 可能先让测试通过，随后继续修改并引入回归，却仍然报告成功。
@@ -43,6 +55,14 @@ seal ui
 
 Runs Console 提供实时列表、状态溯源 DAG、验证器证据、可信事件时间线、
 检查点恢复过程和带密码学摘要的完成凭证。UI 只读，并且只监听本机回环地址。
+
+![StateSeal Runs Console](docs/assets/stateseal-runs-console.svg)
+
+## 适配与自动化
+
+StateSeal 支持 Codex Desktop、Codex CLI、Claude Code 和 Qoder 的集成路径；
+其他终端 Agent 可通过 `seal run -- <command>` 使用同一验证协议。结构化 JSON、
+稳定规则 ID 和完成凭证可用于 CI、评测与研究复现。
 
 ## 安全边界
 

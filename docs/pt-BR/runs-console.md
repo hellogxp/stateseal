@@ -2,6 +2,8 @@
 
 [English](../runs-console.md) | Português do Brasil
 
+![Runs Console do StateSeal](../assets/stateseal-runs-console.svg)
+
 `seal ui` é uma visão local somente leitura do estado de autoridade externo.
 
 ```bash

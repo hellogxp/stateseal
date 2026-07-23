@@ -5,6 +5,8 @@
 [Português do Brasil](../pt-BR/index.md) · [Deutsch](../de/index.md) ·
 [Français](../fr/index.md)
 
+![StateSeal 可信交付链路](../assets/stateseal-trust-pipeline.svg)
+
 | 阅读内容 | 适用场景 |
 | --- | --- |
 | [快速上手](getting-started.md) | 安装、集成以及第一次验证交付 |

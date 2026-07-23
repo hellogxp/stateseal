@@ -4,6 +4,8 @@
 [한국어](../ko/index.md) · [Español](../es/index.md) ·
 [Português do Brasil](../pt-BR/index.md) · [Deutsch](../de/index.md) · **Français**
 
+![Chaîne de livraison fiable de StateSeal](../assets/stateseal-trust-pipeline.svg)
+
 | Document | Quand le lire |
 | --- | --- |
 | [Bien démarrer](getting-started.md) | Installation, intégration et première livraison vérifiée |

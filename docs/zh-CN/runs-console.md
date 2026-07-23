@@ -2,6 +2,8 @@
 
 [English](../runs-console.md) | 简体中文
 
+![StateSeal Runs Console](../assets/stateseal-runs-console.svg)
+
 `seal ui` 是 StateSeal 的本地可观测界面。它把外部权威状态投影为可以操作性理解的
 视图，但不会创建第二套事实来源。
 

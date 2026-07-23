@@ -4,6 +4,8 @@
 [한국어](../ko/index.md) · [Español](../es/index.md) ·
 [Português do Brasil](../pt-BR/index.md) · **Deutsch** · [Français](../fr/index.md)
 
+![Vertrauenswürdige StateSeal-Auslieferung](../assets/stateseal-trust-pipeline.svg)
+
 | Dokument | Zweck |
 | --- | --- |
 | [Erste Schritte](getting-started.md) | Installation, Integration und erste verifizierte Lieferung |

@@ -5,6 +5,8 @@
 [Português do Brasil](../pt-BR/index.md) · [Deutsch](../de/index.md) ·
 [Français](../fr/index.md)
 
+![StateSeal の信頼済み配信パイプライン](../assets/stateseal-trust-pipeline.svg)
+
 | 読むもの | 目的 |
 | --- | --- |
 | [はじめに](getting-started.md) | インストール、統合、最初の検証済み配信 |

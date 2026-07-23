@@ -2,6 +2,8 @@
 
 [English](../runs-console.md) | Deutsch
 
+![StateSeal Runs Console](../assets/stateseal-runs-console.svg)
+
 `seal ui` ist eine schreibgeschützte lokale Sicht auf den externen
 Autoritätszustand.
 

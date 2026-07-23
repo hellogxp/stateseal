@@ -14,6 +14,18 @@ StateSeal は、Coding Agent が生成した候補を、正確なコード状態
 StateSeal は別の Coding Agent でも、テストの代替でもありません。既存の Agent と
 検証コマンドを包み、配信されるコードが検証済みコードと完全に一致することを保証します。
 
+![StateSeal の信頼済み配信パイプライン](docs/assets/stateseal-trust-pipeline.svg)
+
+## 主な機能
+
+| 機能 | 価値 |
+| --- | --- |
+| 正確な状態への結合 | 検証結果を、それを生成したコードツリーに結び付けます |
+| 独立検証 | クリーンな evaluator でポリシーを実行し、Agent の自己申告に依存しません |
+| チェックポイント復旧 | 後続候補が回帰しても、最後の信頼済み状態を保持します |
+| 外部承認 | Broker が証拠、範囲、ポリシーから最終判断を行います |
+| 監査可能なレシート | 来歴、証拠の出所、残余リスクを記録します |
+
 ## 必要な理由
 
 長時間動作する Agent は、テスト合格後に編集を続けて回帰を導入しながら、成功を
@@ -38,6 +50,14 @@ seal ui
 Runs Console では、全リポジトリの実行、状態来歴 DAG、検証証拠、信頼済みイベント、
 チェックポイント復旧、完了レシートを確認できます。UI は読み取り専用で、
 ループバックアドレスだけを使用します。
+
+![StateSeal Runs Console](docs/assets/stateseal-runs-console.svg)
+
+## 統合と自動化
+
+Codex Desktop、Codex CLI、Claude Code、Qoder 向けの統合を提供します。その他の
+ターミナル Agent も `seal run -- <command>` で同じプロトコルを利用できます。
+JSON 出力、安定したルール ID、完了レシートは CI や研究再現にも利用できます。
 
 ## 信頼境界
 

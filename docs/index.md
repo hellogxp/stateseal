@@ -5,6 +5,8 @@
 [Português do Brasil](pt-BR/index.md) · [Deutsch](de/index.md) ·
 [Français](fr/index.md)
 
+![StateSeal trusted delivery pipeline](assets/stateseal-trust-pipeline.svg)
+
 | Read this | When you need |
 | --- | --- |
 | [Getting started](getting-started.md) | Installation and the first verified delivery |

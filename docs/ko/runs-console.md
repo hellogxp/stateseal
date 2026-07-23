@@ -2,6 +2,8 @@
 
 [English](../runs-console.md) | 한국어
 
+![StateSeal Runs Console](../assets/stateseal-runs-console.svg)
+
 `seal ui`는 외부 authority state를 읽기 전용으로 시각화하는 로컬 관측 화면입니다.
 
 ```bash

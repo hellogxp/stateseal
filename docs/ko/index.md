@@ -4,6 +4,8 @@
 **한국어** · [Español](../es/index.md) · [Português do Brasil](../pt-BR/index.md) ·
 [Deutsch](../de/index.md) · [Français](../fr/index.md)
 
+![StateSeal 신뢰 전달 파이프라인](../assets/stateseal-trust-pipeline.svg)
+
 | 문서 | 용도 |
 | --- | --- |
 | [시작하기](getting-started.md) | 설치, 통합, 첫 검증 전달 |

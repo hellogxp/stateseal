@@ -1,5 +1,7 @@
 # Runs console
 
+![StateSeal Runs Console](assets/stateseal-runs-console.svg)
+
 `seal ui` is StateSeal's local observability surface. It turns external
 authority state into an operational view without creating a second source of
 truth.

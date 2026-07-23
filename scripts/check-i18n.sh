@@ -35,6 +35,19 @@ for readme in README.zh-CN.md README.ja.md README.ko.md README.es.md README.pt-B
 	test -f "$root/$readme" || { echo "missing localized README: $readme" >&2; exit 1; }
 done
 
+for asset in stateseal-trust-pipeline.svg stateseal-runs-console.svg; do
+	test -f "$root/docs/assets/$asset" || {
+		echo "missing shared documentation visual: docs/assets/$asset" >&2
+		exit 1
+	}
+	for readme in README.md README.zh-CN.md README.ja.md README.ko.md README.es.md README.pt-BR.md README.de.md README.fr.md; do
+		grep -Fq "docs/assets/$asset" "$root/$readme" || {
+			echo "$readme does not reference shared visual: $asset" >&2
+			exit 1
+		}
+	done
+done
+
 base_sha=${BASE_SHA:-}
 if [ -n "$base_sha" ] && git -C "$root" cat-file -e "$base_sha^{commit}" 2>/dev/null; then
 	git -C "$root" diff --name-only "$base_sha"...HEAD >"$tmp_dir/changed"
