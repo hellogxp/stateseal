@@ -35,6 +35,16 @@ for readme in README.zh-CN.md README.ja.md README.ko.md README.es.md README.pt-B
 	test -f "$root/$readme" || { echo "missing localized README: $readme" >&2; exit 1; }
 done
 
+english_example='Fix duplicate callbacks that cause duplicate charges while preserving API compatibility'
+grep -Fq "seal run \"$english_example\"" "$root/README.md" || {
+	echo "README.md is missing the canonical English seal run example" >&2
+	exit 1
+}
+if grep -Fq 'seal run "修复' "$root/README.md"; then
+	echo "README.md contains a Chinese seal run example" >&2
+	exit 1
+fi
+
 for asset in stateseal-trust-pipeline.svg stateseal-runs-console.svg; do
 	test -f "$root/docs/assets/$asset" || {
 		echo "missing shared documentation visual: docs/assets/$asset" >&2

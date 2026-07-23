@@ -71,7 +71,7 @@ Then use StateSeal in your own repository:
 ```bash
 seal integrate codex-desktop   # once for this Agent on this computer
 cd your-project
-seal run "修复重复回调导致的重复扣款，并保持现有接口兼容"
+seal run "Fix duplicate callbacks that cause duplicate charges while preserving API compatibility"
 ```
 
 Open the local runs console from any directory:
@@ -94,7 +94,7 @@ Or stay inside Codex Desktop after the one-time integration, open the Git
 project, and describe the development goal normally:
 
 ```text
-修复重复回调导致的重复扣款，并保持现有接口兼容
+Fix duplicate callbacks that cause duplicate charges while preserving API compatibility
 ```
 
 The Desktop adapter routes code-changing requests through StateSeal's MCP
