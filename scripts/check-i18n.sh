@@ -13,6 +13,8 @@ if ! command -v jq >/dev/null 2>&1; then
 	exit 1
 fi
 
+python3 "$root/scripts/check-doc-language.py"
+
 jq -r 'keys[]' "$catalog_dir/en.json" | sort >"$tmp_dir/en.keys"
 for locale in $locales; do
 	catalog="$catalog_dir/$locale.json"
@@ -40,10 +42,6 @@ grep -Fq "seal run \"$english_example\"" "$root/README.md" || {
 	echo "README.md is missing the canonical English seal run example" >&2
 	exit 1
 }
-if grep -Fq 'seal run "修复' "$root/README.md"; then
-	echo "README.md contains a Chinese seal run example" >&2
-	exit 1
-fi
 
 for asset in stateseal-trust-pipeline.svg stateseal-runs-console.svg; do
 	test -f "$root/docs/assets/$asset" || {

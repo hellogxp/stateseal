@@ -48,6 +48,8 @@ Korean locales use their base catalog. Unsupported locales fall back to English.
   rewrite the value stored in a receipt or event.
 - Use short, active sentences and culturally neutral examples.
 - Keep Markdown structure and links aligned with the English source.
+- Keep canonical English pages free of cross-locale copy. Language names in the
+  locale selector and support matrix are the only intentional CJK exceptions.
 - Machine assistance may produce a draft, but a translation must be reviewed
   for technical meaning before it is marked complete.
 - A source change to README, documentation index, getting started, or Runs
@@ -60,4 +62,6 @@ sh scripts/check-i18n.sh
 ```
 
 CI also compares changed canonical core pages with their locale counterparts so
-translation drift is visible at review time.
+translation drift is visible at review time. The same check scans canonical
+English Markdown and the English UI catalog for accidental Han, Kana, or Hangul
+copy and reports the exact file and line.
