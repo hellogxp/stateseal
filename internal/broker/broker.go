@@ -132,7 +132,7 @@ func (b *Broker) VerifyCurrent(checks []config.Check) (protocol.CompletionReceip
 		TreeSHA256: tree, AdmissionEvidence: evidenceIDs(evidence), PolicyDigest: b.PolicyHash, VerifiedAt: time.Now().UTC()}
 	b.State.Checkpoint = cp
 	b.State.CheckpointsVerified++
-	b.event("CHECKPOINT_VERIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "tree_sha256": tree})
+	b.event("CHECKPOINT_VERIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "candidate_id": candidate.CandidateID, "tree_sha256": tree})
 	return b.finish(protocol.VerdictAdmitted, cp, evidence, "")
 }
 
@@ -248,7 +248,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 	}
 	if !verifier.Passed(admission, len(b.Policy.Admission.Checks)) {
 		b.State.CandidatesRejected++
-		b.event("CANDIDATE_REJECTED", map[string]any{"reason": "admission check failed"})
+		b.event("CANDIDATE_REJECTED", map[string]any{"candidate_id": candidate.CandidateID, "reason": "admission check failed"})
 		if recoverTerminal && previousCheckpoint != nil {
 			return b.recertifyCheckpoint(m, previousCheckpoint, candidate.CandidateID, recoveryReason)
 		}
@@ -259,7 +259,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 	b.State.Checkpoint = cp
 	b.State.CheckpointsVerified++
 	b.State.Status = "VERIFIED"
-	b.event("CHECKPOINT_VERIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "tree_sha256": tree, "commit": commit})
+	b.event("CHECKPOINT_VERIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "candidate_id": candidate.CandidateID, "tree_sha256": tree, "commit": commit})
 
 	// Completion is always a fresh execution against the immutable checkpoint.
 	freshEval, freshCleanup, err := m.Evaluator(commit)
@@ -283,7 +283,7 @@ func (b *Broker) admitManaged(m *worktree.Manager, proposal, source string, reco
 		}
 		return b.finish(protocol.VerdictRejected, cp, completion, failureReason("fresh completion recertification failed", completion))
 	}
-	b.event("COMPLETION_RECERTIFIED", map[string]any{"checkpoint_id": cp.CheckpointID})
+	b.event("COMPLETION_RECERTIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "candidate_id": candidate.CandidateID})
 	return b.finish(protocol.VerdictAdmitted, cp, completion, "")
 }
 
@@ -339,7 +339,7 @@ func (b *Broker) recertifyCheckpoint(m *worktree.Manager, cp *protocol.VerifiedC
 		return b.finishSelected(protocol.VerdictRejected, cp, evidence, failureReason("selected checkpoint failed fresh completion recertification", evidence), terminalCandidate, selectionReason, false)
 	}
 	_ = b.event("CHECKPOINT_RESTORED", map[string]any{"checkpoint_id": cp.CheckpointID, "tree_sha256": tree})
-	_ = b.event("COMPLETION_RECERTIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "recovered": true})
+	_ = b.event("COMPLETION_RECERTIFIED", map[string]any{"checkpoint_id": cp.CheckpointID, "candidate_id": cp.CandidateID, "recovered": true})
 	return b.finishSelected(protocol.VerdictAdmitted, cp, evidence, "", terminalCandidate, selectionReason, true)
 }
 

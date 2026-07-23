@@ -67,6 +67,19 @@ cd your-project
 seal run "修复重复回调导致的重复扣款，并保持现有接口兼容"
 ```
 
+Open the local runs console from any directory:
+
+```bash
+seal ui
+```
+
+The console discovers every local StateSeal run across repositories. The Runs
+view answers what is active, admitted, blocked, or applied; each run opens into
+an interactive state-provenance DAG with candidate transitions, verifier
+evidence, checkpoint recovery, the integrity-checked event timeline, and the
+completion receipt. It updates live, remains read-only, and listens only on a
+loopback address.
+
 Or stay inside Codex Desktop after the one-time integration, open the Git
 project, and describe the development goal normally:
 
@@ -192,6 +205,7 @@ external protected gate. See [Verification model](docs/verification-model.md).
 | `seal submit` | Request an intermediate candidate boundary during `seal run` |
 | `seal status` | Show the task, checkpoint, verdict, and coverage |
 | `seal timeline` | Show the integrity-verified event timeline (`--json` supported) |
+| `seal ui` | Open the live, read-only Runs console and inspect state provenance DAGs, evidence, and receipts |
 | `seal diff` | Compare the verified checkpoint with its trusted base |
 | `seal apply` | Apply an admitted checkpoint to the user branch |
 | `seal explain` | Explain the latest rule and next action (`--json` supported) |
@@ -242,11 +256,13 @@ existing agent → proposal worktree → candidate
 
 Authoritative state and the hash-chained event ledger live outside the repository under the platform state directory. Exported `.stateseal/receipts/*.json` files are shareable records, not admission authority.
 
-StateSeal does not ship a separate Desktop application. Existing Agent Desktop
-products integrate through MCP; CLI agents use native lifecycle hooks when
-available. Both surfaces delegate to the same Go broker, evaluator, checkpoint,
-and receipt protocol. See the [current product map](docs/product-map.md) and
-[compatibility evidence](docs/compatibility.md). The product map is also
+`seal ui` is an embedded local observability surface, not a separate authority
+or Desktop application. It has no write API and cannot admit or apply code.
+Existing Agent Desktop products integrate through MCP; CLI agents use native
+lifecycle hooks when available. All surfaces delegate to the same Go broker,
+evaluator, checkpoint, and receipt protocol. See the
+[Runs console guide](docs/runs-console.md), [current product map](docs/product-map.md),
+and [compatibility evidence](docs/compatibility.md). The product map is also
 available in [Simplified Chinese](docs/product-map.zh-CN.md).
 
 ## Development

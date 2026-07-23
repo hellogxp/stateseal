@@ -3,6 +3,7 @@
 | Read this | When you need |
 | --- | --- |
 | [Getting started](getting-started.md) | Installation and the first verified delivery |
+| [Runs console](runs-console.md) | Live all-runs overview, provenance DAG, evidence, and local security model |
 | [Product map](product-map.md) | User flow, architecture, capability status and roadmap |
 | [Verification model](verification-model.md) | L0–L3 coverage, provenance, safety and liveness |
 | [Threat model](threat-model.md) | Covered failures, trust boundary and explicit exclusions |

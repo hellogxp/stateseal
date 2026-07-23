@@ -127,6 +127,30 @@ specification completeness, and remote CI remain explicit residual risks.
 Use `seal status`, `seal explain`, or `seal run --json` to inspect the same
 coverage, provenance and delivery-impact fields after the interactive run.
 
+## Inspect all runs visually
+
+Start the local console from any directory:
+
+```bash
+seal ui
+```
+
+The browser opens a Runs overview across all repositories known to the current
+OS user. Search or filter the list, then select a run to inspect:
+
+- the state-provenance DAG from task intent through candidate, verification,
+  checkpoint, recovery, final decision, and explicit apply;
+- fresh verifier evidence and bounded command output;
+- the hash-chain-validated event timeline;
+- the completion receipt, rule, disposition, exact checkpoint, and residual
+  reason.
+
+The view refreshes from the append-only ledger while a run is active. It is
+read-only and binds to a random `127.0.0.1` port by default. For terminal-only
+or remote environments, use `seal ui --no-open`; the printed URL can be opened
+on the same machine. StateSeal deliberately rejects non-loopback
+`--address` values.
+
 ## Codex Desktop path
 
 After `seal integrate codex-desktop`, restart Codex Desktop, choose the local

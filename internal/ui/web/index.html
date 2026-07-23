@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>StateSeal Runs</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <span class="brand-mark" aria-hidden="true"><span></span></span>
+      <span>
+        <strong>StateSeal</strong>
+        <small>Local control plane</small>
+      </span>
+    </a>
+    <div class="topbar-actions">
+      <span id="connection" class="connection"><i></i> Live</span>
+      <button id="refresh" class="icon-button" title="Refresh runs" aria-label="Refresh runs">
+        <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="app" class="app" aria-live="polite">
+    <section class="loading-state">
+      <span class="loader"></span>
+      <p>Reading trusted local state…</p>
+    </section>
+  </main>
+
+  <template id="empty-template">
+    <section class="empty-state panel">
+      <div class="empty-orbit"><span></span></div>
+      <p class="eyebrow">NO RUNS YET</p>
+      <h1>Your verified agent workflows will appear here.</h1>
+      <p>Start one in a StateSeal-enabled repository. This console watches external authority state automatically.</p>
+      <code>seal run "Describe the change"</code>
+    </section>
+  </template>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

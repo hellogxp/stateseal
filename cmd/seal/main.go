@@ -56,7 +56,7 @@ func newRoot() *cobra.Command {
 	cmd := &cobra.Command{Use: "seal", Short: "Transactional admission for coding-agent changes", SilenceUsage: true, SilenceErrors: true}
 	cmd.Version = info.Version
 	cmd.SetVersionTemplate("seal {{.Version}}\n")
-	cmd.AddCommand(versionCmd(), integrateCmd(), mcpCmd(), desktopCmd(), setupCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd())
+	cmd.AddCommand(versionCmd(), integrateCmd(), mcpCmd(), desktopCmd(), setupCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd(), uiCmd())
 	return cmd
 }
 

@@ -15,6 +15,17 @@ import (
 
 type Store struct{ Dir string }
 
+// StoredTask is a task discovered in StateSeal's external authority state.
+// IntegrityError is populated when state is readable but its append-only
+// ledger cannot be trusted; callers can surface the run without trusting its
+// event timeline.
+type StoredTask struct {
+	RepositoryID   string
+	State          protocol.TaskState
+	Events         []protocol.Event
+	IntegrityError string
+}
+
 // ProjectSettings are local user preferences. They live outside the repository
 // so a coding Agent cannot silently change which integration StateSeal trusts.
 type ProjectSettings struct {
@@ -140,6 +151,56 @@ func stateHome() (string, error) {
 		return filepath.Join(h, "Library", "Application Support"), nil
 	}
 	return filepath.Join(h, ".local", "state"), nil
+}
+
+// ListTasks discovers runs across every local repository known to StateSeal.
+// It never follows symlinks and ignores non-task metadata such as active-task
+// and project settings.
+func ListTasks() ([]StoredTask, error) {
+	base, err := stateHome()
+	if err != nil {
+		return nil, err
+	}
+	root := filepath.Join(base, "stateseal")
+	repositories, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var tasks []StoredTask
+	for _, repository := range repositories {
+		if !repository.IsDir() || repository.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		repositoryDir := filepath.Join(root, repository.Name())
+		entries, err := os.ReadDir(repositoryDir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+				continue
+			}
+			if err := identity.ValidateTaskID(entry.Name()); err != nil {
+				continue
+			}
+			taskStore := &Store{Dir: filepath.Join(repositoryDir, entry.Name())}
+			state, err := taskStore.Load()
+			if err != nil || state.TaskID != entry.Name() {
+				continue
+			}
+			item := StoredTask{RepositoryID: repository.Name(), State: state}
+			item.Events, err = taskStore.ReadEvents()
+			if err != nil {
+				item.Events = nil
+				item.IntegrityError = err.Error()
+			}
+			tasks = append(tasks, item)
+		}
+	}
+	return tasks, nil
 }
 
 func (s *Store) Save(state protocol.TaskState) error {

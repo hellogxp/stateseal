@@ -109,3 +109,45 @@ func TestLockIsExclusive(t *testing.T) {
 		t.Fatal("second lock unexpectedly succeeded")
 	}
 }
+
+func TestListTasksAcrossRepositoriesAndReportsLedgerIntegrity(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	first, err := Open("/repo/alpha", "task-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Save(protocol.TaskState{TaskID: "task-a", RepoRoot: "/repo/alpha", Status: "WORKING"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.Append(protocol.Event{Type: "TASK_CREATED", TaskID: "task-a"}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := Open("/repo/beta", "task-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Save(protocol.TaskState{TaskID: "task-b", RepoRoot: "/repo/beta", Status: "ADMITTED"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(second.Dir, "ledger.jsonl"), []byte("not-json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks, err := ListTasks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("got %d tasks, want 2: %+v", len(tasks), tasks)
+	}
+	byID := map[string]StoredTask{}
+	for _, task := range tasks {
+		byID[task.State.TaskID] = task
+	}
+	if len(byID["task-a"].Events) != 1 || byID["task-a"].IntegrityError != "" {
+		t.Fatalf("valid task was not loaded: %+v", byID["task-a"])
+	}
+	if byID["task-b"].IntegrityError == "" {
+		t.Fatalf("tampered task did not report integrity failure: %+v", byID["task-b"])
+	}
+}
