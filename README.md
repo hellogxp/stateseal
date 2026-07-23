@@ -1,5 +1,10 @@
 # StateSeal
 
+**English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) ·
+[한국어](README.ko.md) · [Español](README.es.md) ·
+[Português do Brasil](README.pt-BR.md) · [Deutsch](README.de.md) ·
+[Français](README.fr.md)
+
 StateSeal turns coding-agent candidates into state-bound, independently
 verified, recoverable, recertifiable, and auditable delivery results—with
 explicit verification coverage and residual risk.
@@ -78,7 +83,8 @@ view answers what is active, admitted, blocked, or applied; each run opens into
 an interactive state-provenance DAG with candidate transitions, verifier
 evidence, checkpoint recovery, the integrity-checked event timeline, and the
 completion receipt. It updates live, remains read-only, and listens only on a
-loopback address.
+loopback address. Its interface is available in English, Simplified Chinese,
+Japanese, Korean, Spanish, Brazilian Portuguese, German, and French.
 
 Or stay inside Codex Desktop after the one-time integration, open the Git
 project, and describe the development goal normally:
@@ -122,7 +128,8 @@ automation. Your branch is unchanged until apply succeeds.
 See the [documentation index](docs/index.md) or
 [Getting started](docs/getting-started.md) for the complete installation,
 integration, first-project confirmation, delivery, and uninstall flow. A
-[Simplified Chinese guide](docs/getting-started.zh-CN.md) is also available.
+[Simplified Chinese guide](docs/zh-CN/getting-started.md) and localized
+documentation in seven additional languages are also available.
 
 ## Policy
 
@@ -263,7 +270,7 @@ lifecycle hooks when available. All surfaces delegate to the same Go broker,
 evaluator, checkpoint, and receipt protocol. See the
 [Runs console guide](docs/runs-console.md), [current product map](docs/product-map.md),
 and [compatibility evidence](docs/compatibility.md). The product map is also
-available in [Simplified Chinese](docs/product-map.zh-CN.md).
+available in [Simplified Chinese](docs/zh-CN/product-map.md).
 
 ## Development
 

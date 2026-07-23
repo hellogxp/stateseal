@@ -60,6 +60,16 @@ a { color: inherit; text-decoration: none; }
 .brand strong { display: block; letter-spacing: -.02em; font-size: 15px; }
 .brand small { display: block; margin-top: 2px; color: var(--muted-2); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .topbar-actions { display: flex; align-items: center; gap: 14px; }
+.language-picker select {
+  max-width: 168px; height: 34px; padding: 0 28px 0 10px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 9px; outline: none;
+  background: var(--surface-solid); cursor: pointer; font-size: 11px;
+}
+.language-picker select:hover, .language-picker select:focus { color: var(--text); border-color: var(--line-strong); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 .connection { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 7px; }
 .connection i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
 .connection.offline i { background: var(--amber); box-shadow: none; }
@@ -177,14 +187,15 @@ a { color: inherit; text-decoration: none; }
 .legend span { display: flex; align-items: center; gap: 5px; }
 .legend i { width: 6px; height: 6px; border-radius: 50%; background: var(--legend); }
 
-.dag-shell { position: relative; min-height: 410px; margin: 12px; overflow: hidden; border: 1px solid rgba(148,163,184,.09); border-radius: 12px; background-color: #0a0e14; background-image: radial-gradient(rgba(148,163,184,.14) .65px, transparent .65px); background-size: 18px 18px; }
-.dag-scroll { width: 100%; min-height: 410px; overflow: auto; }
-.dag { display: block; min-height: 410px; }
+.dag-shell { position: relative; min-height: 300px; margin: 12px; overflow: hidden; border: 1px solid rgba(148,163,184,.09); border-radius: 12px; background-color: #0a0e14; background-image: radial-gradient(rgba(148,163,184,.14) .65px, transparent .65px); background-size: 18px 18px; }
+.dag-scroll { width: 100%; min-height: 300px; overflow: auto; }
+.dag { display: block; min-height: 300px; }
 .dag-edge { fill: none; stroke: #364152; stroke-width: 1.2; }
 .dag-edge.passed { stroke: rgba(69,212,148,.48); }
 .dag-edge.failed { stroke: rgba(251,113,133,.5); }
 .dag-edge.warning { stroke: rgba(245,185,66,.5); }
 .dag-edge.running { stroke: rgba(110,168,254,.65); stroke-dasharray: 5 7; animation: edge-flow .85s linear infinite; }
+.dag-arrow { fill: #425064; }
 @keyframes edge-flow { to { stroke-dashoffset: -12; } }
 .dag-node { cursor: pointer; outline: none; }
 .dag-node rect { fill: #111722; stroke: #293241; stroke-width: 1; transition: stroke .18s, fill .18s, filter .18s; }
@@ -251,6 +262,9 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 720px) {
   .app { width: min(100% - 26px, 1480px); padding-top: 30px; }
   .topbar { padding: 0 14px; }
+  .language-picker select { width: 43px; padding: 0 7px; color: transparent; }
+  .language-picker { position: relative; }
+  .language-picker::after { content: "文"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 11px; pointer-events: none; }
   .hero, .detail-head { align-items: flex-start; flex-direction: column; }
   .metrics { width: 100%; justify-content: space-between; gap: 12px; }
   .toolbar { align-items: stretch; flex-direction: column; }

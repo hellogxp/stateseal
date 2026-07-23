@@ -1,3 +1,5 @@
+[English](../getting-started.md) | 简体中文
+
 # StateSeal 快速上手
 
 正常使用只有三层一次性配置，之后每次只需描述开发目标：

@@ -1,3 +1,5 @@
+[English](../product-map.md) | 简体中文
+
 # StateSeal 产品全景
 
 StateSeal 将 Coding Agent 的候选代码转换为与确切状态绑定、经过独立验证、

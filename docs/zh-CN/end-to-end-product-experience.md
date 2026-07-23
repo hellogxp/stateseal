@@ -1,3 +1,5 @@
+[English](../end-to-end-product-experience.md) | 简体中文
+
 # StateSeal 端到端产品体验报告
 
 本文记录一次真实、完整的 StateSeal 产品使用过程：用户提出开发目标，Codex 在隔离环境中实现需求，StateSeal 对精确代码快照进行独立验证，用户检查证据后应用 checkpoint，最终完成测试与远程推送。

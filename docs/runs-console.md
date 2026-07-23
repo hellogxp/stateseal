@@ -68,6 +68,20 @@ Select a node to inspect its candidate, tree, checkpoint, evidence, rule, or
 receipt identifiers. Verifier output is bounded before it reaches the browser
 so a pathological command cannot make the console unresponsive.
 
+The graph uses its actual edges to calculate topology. Empty semantic phases are
+not reserved as blank columns, admission evidence is placed before the
+checkpoint it certifies, and simple linear runs are centered in a compact
+canvas. Long labels are clipped within their node; the complete value remains
+available through the tooltip and inspector.
+
+## Languages
+
+The Runs Console supports English, Simplified Chinese, Japanese, Korean,
+Spanish, Brazilian Portuguese, German, and French. It follows an explicit user
+selection first, then the browser locale, and finally falls back to English.
+Task goals, protocol values, IDs, digests, and verifier output remain in their
+original form because they are audit data rather than interface copy.
+
 ## Live updates
 
 The embedded server uses a server-sent event stream. It publishes a new

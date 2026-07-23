@@ -1,0 +1,57 @@
+# StateSeal
+
+[English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) ·
+[한국어](README.ko.md) · [Español](README.es.md) · **Português do Brasil** ·
+[Deutsch](README.de.md) · [Français](README.fr.md)
+
+O StateSeal transforma candidatos produzidos por Coding Agents em resultados de
+entrega vinculados ao estado exato do código, verificados de forma independente,
+recuperáveis, recertificáveis e auditáveis. A cobertura da verificação e os
+riscos residuais também ficam explícitos.
+
+> O modelo propõe. A evidência informa. O Broker decide. O Git registra. O usuário aplica.
+
+O StateSeal não é outro Coding Agent e não substitui seus testes. Ele envolve o
+Agent e os comandos de verificação existentes para garantir que o código
+entregue seja exatamente o código verificado.
+
+## Por quê
+
+Um Agent de longa duração pode passar nos testes, continuar editando, introduzir
+uma regressão e ainda informar sucesso. O StateSeal torna candidatos, evidências,
+checkpoints, recertificação e admissão estados explícitos do protocolo.
+
+```text
+WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
+                           ↘ REJECTED                 ↘ STALE / ABSTAINED
+```
+
+## Início rápido
+
+```bash
+go install github.com/hellogxp/stateseal/cmd/seal@latest
+cd your-project
+seal integrate codex-desktop
+seal run "Corrigir callbacks duplicados e preservar a compatibilidade"
+seal ui
+```
+
+O Runs Console mostra execuções de todos os repositórios, o DAG de proveniência,
+evidências do verificador, linha do tempo confiável, recuperação e recibos. A UI
+é somente leitura e escuta apenas no endereço de loopback.
+
+## Limite de confiança
+
+`ADMITTED` significa apenas que o checkpoint exato atendeu à política em
+`seal.yaml`. Não prova que a especificação ou os testes estejam completos nem
+que o host seja íntegro.
+
+## Documentação
+
+- [Documentação em português](docs/pt-BR/index.md)
+- [Primeiros passos](docs/pt-BR/getting-started.md)
+- [Runs Console](docs/pt-BR/runs-console.md)
+- [Referência técnica em inglês](docs/index.md)
+
+Valores de protocolo, comandos, digest e logs permanecem em inglês para
+preservar o significado de auditoria.

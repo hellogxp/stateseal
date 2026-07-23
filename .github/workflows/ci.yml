@@ -20,6 +20,10 @@ jobs:
       - run: go test -race ./...
       - run: go vet ./...
       - run: go build -trimpath ./cmd/seal
+      - name: Validate localization coverage and synchronization
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: sh scripts/check-i18n.sh
       - name: Validate release packaging
         env:
           VERSION: v0.0.0-ci

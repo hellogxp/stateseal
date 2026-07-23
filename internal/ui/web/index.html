@@ -19,6 +19,19 @@
       </span>
     </a>
     <div class="topbar-actions">
+      <label class="language-picker">
+        <span class="sr-only">Language</span>
+        <select id="language" aria-label="Language">
+          <option value="en">English</option>
+          <option value="zh-CN">简体中文</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="es">Español</option>
+          <option value="pt-BR">Português do Brasil</option>
+          <option value="de">Deutsch</option>
+          <option value="fr">Français</option>
+        </select>
+      </label>
       <span id="connection" class="connection"><i></i> Live</span>
       <button id="refresh" class="icon-button" title="Refresh runs" aria-label="Refresh runs">
         <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
@@ -29,16 +42,16 @@
   <main id="app" class="app" aria-live="polite">
     <section class="loading-state">
       <span class="loader"></span>
-      <p>Reading trusted local state…</p>
+      <p id="loading-copy">Reading trusted local state…</p>
     </section>
   </main>
 
   <template id="empty-template">
     <section class="empty-state panel">
       <div class="empty-orbit"><span></span></div>
-      <p class="eyebrow">NO RUNS YET</p>
-      <h1>Your verified agent workflows will appear here.</h1>
-      <p>Start one in a StateSeal-enabled repository. This console watches external authority state automatically.</p>
+      <p class="eyebrow" data-i18n="empty.eyebrow">NO RUNS YET</p>
+      <h1 data-i18n="empty.title">Your verified agent workflows will appear here.</h1>
+      <p data-i18n="empty.body">Start one in a StateSeal-enabled repository. This console watches external authority state automatically.</p>
       <code>seal run "Describe the change"</code>
     </section>
   </template>

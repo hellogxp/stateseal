@@ -19,7 +19,10 @@ func TestRunsAPIProjectsTrustedStateAndGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	candidate := protocol.CandidateState{CandidateID: "cand_123", TaskID: "fix-callback", Source: "codex", CreatedAt: time.Now().UTC()}
-	checkpoint := protocol.VerifiedCheckpoint{CheckpointID: "cp_123", CandidateID: candidate.CandidateID, VerifiedAt: time.Now().UTC()}
+	checkpoint := protocol.VerifiedCheckpoint{
+		CheckpointID: "cp_123", CandidateID: candidate.CandidateID,
+		AdmissionEvidence: []string{"ev_123"}, VerifiedAt: time.Now().UTC(),
+	}
 	evidence := protocol.EvidenceEnvelope{
 		EvidenceID: "ev_123", CandidateID: candidate.CandidateID, VerifierIdentity: "command/unit@v1",
 		VerificationPhase: "admission", StartedAt: time.Now().Add(-time.Second), FinishedAt: time.Now(), Output: "ok",
@@ -71,6 +74,18 @@ func TestRunsAPIProjectsTrustedStateAndGraph(t *testing.T) {
 	if len(snapshot.Nodes) < 5 || len(snapshot.Edges) < 4 || snapshot.Receipt == nil {
 		t.Fatalf("incomplete graph projection: nodes=%d edges=%d receipt=%+v", len(snapshot.Nodes), len(snapshot.Edges), snapshot.Receipt)
 	}
+	var evidenceToCheckpoint, candidateToCheckpoint bool
+	for _, edge := range snapshot.Edges {
+		if edge.Source == "evidence-ev_123" && edge.Target == "checkpoint-cp_123" {
+			evidenceToCheckpoint = true
+		}
+		if edge.Source == "candidate-cand_123" && edge.Target == "checkpoint-cp_123" {
+			candidateToCheckpoint = true
+		}
+	}
+	if !evidenceToCheckpoint || candidateToCheckpoint {
+		t.Fatalf("checkpoint provenance was not rewired through admission evidence: %+v", snapshot.Edges)
+	}
 	if snapshot.Evidence[0].Output != "ok" {
 		t.Fatalf("evidence output changed unexpectedly: %q", snapshot.Evidence[0].Output)
 	}
@@ -111,5 +126,10 @@ func TestStaticConsoleIsEmbedded(t *testing.T) {
 	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "StateSeal Runs") {
 		t.Fatalf("embedded console unavailable: %d %s", recorder.Code, recorder.Body.String())
+	}
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/locales/zh-CN.json", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"runs.title"`) {
+		t.Fatalf("embedded locale catalog unavailable: %d %s", recorder.Code, recorder.Body.String())
 	}
 }

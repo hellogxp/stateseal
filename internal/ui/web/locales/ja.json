@@ -1,0 +1,17 @@
+{
+  "common.language": "言語", "common.loading": "信頼済みローカル状態を読み込んでいます…", "common.candidates": "候補", "common.evidence": "証拠", "common.checkpoints": "チェックポイント",
+  "connection.live": "ライブ", "connection.offline": "オフライン", "connection.reconnecting": "再接続中",
+  "empty.eyebrow": "実行はまだありません", "empty.title": "検証済みのエージェントワークフローがここに表示されます。", "empty.body": "StateSeal 対応リポジトリで実行を開始すると、外部の権威状態を自動的に監視します。",
+  "error.eyebrow": "ローカル状態を利用できません", "error.title": "StateSeal の実行を読み込めません", "time.justNow": "たった今",
+  "runs.eyebrow": "検証済みエージェントワークフロー", "runs.title": "実行", "runs.description": "信頼済みローカル状態から、候補、検証判断、復旧、明示的な適用を確認します。", "runs.total": "全実行", "runs.search": "目標、タスク、リポジトリを検索…", "runs.noMatch": "条件に一致する実行はありません。", "runs.progress": "意図 → 候補 → チェックポイント → 判断 → 適用",
+  "filter.all": "すべて", "filter.active": "実行中", "filter.admitted": "承認済み", "filter.notAdmitted": "未承認",
+  "status.active": "実行中", "status.admitted": "承認済み", "status.notAdmitted": "未承認", "status.passed": "合格", "status.recovered": "復旧済み", "status.blocked": "ブロック",
+  "integrity.warning": "台帳の整合性警告", "integrity.detail": "台帳の整合性警告: {error}",
+  "detail.projecting": "状態来歴を構築しています…", "detail.allRuns": "すべての実行", "detail.updated": "{time} に更新", "detail.disposition": "処置", "detail.pending": "保留中", "detail.mode": "{mode} モード", "detail.inProgress": "実行中", "detail.duration": "所要時間", "detail.started": "{time} に開始", "detail.awaitingEvent": "最初のイベントを待機中", "detail.candidateStats": "{rejected} 件拒否 · {checkpoints} 件チェックポイント化", "detail.recovered": "復旧チェックポイントを再認証済み", "detail.stateBound": "状態に結び付いた実行",
+  "dag.title": "状態来歴 DAG", "dag.help": "ノードをクリックして、結び付いた状態と証拠を確認します。", "dag.aria": "実行状態来歴グラフ",
+  "timeline.title": "信頼済みイベントタイムライン", "timeline.help": "ハッシュ連続性を持つ追記専用台帳。", "timeline.events": "イベント", "timeline.empty": "信頼済みイベントはまだありません。",
+  "evidence.title": "検証証拠", "evidence.help": "正確なコード状態に結び付いた新規実行。", "evidence.records": "件", "evidence.empty": "検証証拠はまだありません。", "evidence.timedOut": "タイムアウト", "evidence.failed": "失敗", "evidence.verifier": "検証器", "evidence.noOutput": "出力はありません。",
+  "receipt.title": "完了レシート", "receipt.help": "暗号学的な判断成果物。", "receipt.verdict": "判定", "receipt.rule": "ルール", "receipt.checkpoint": "チェックポイント", "receipt.id": "レシート ID", "receipt.digest": "ダイジェスト",
+  "inspector.close": "インスペクターを閉じる", "inspector.status": "状態", "inspector.timestamp": "タイムスタンプ",
+  "node.goal": "タスク意図", "node.candidate": "候補", "node.guard": "ポリシーガード", "node.verifier": "検証器", "node.regression": "回帰を検出", "node.rejection": "候補を拒否", "node.checkpoint": "検証済みチェックポイント", "node.selection": "チェックポイントを選択", "node.restore": "チェックポイントを復元", "node.recertification": "再認証済み", "node.receipt": "完了レシート", "node.apply": "適用済み", "node.integrity": "台帳の整合性"
+}

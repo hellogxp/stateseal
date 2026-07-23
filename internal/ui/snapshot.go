@@ -136,6 +136,8 @@ func projectGraph(state protocol.TaskState, events []protocol.Event, evidence []
 	var edges []GraphEdge
 	nodeIDs := map[string]bool{"goal": true}
 	candidateNodes := map[string]string{}
+	checkpointNodes := map[string]string{}
+	evidenceNodes := map[string]string{}
 	lastCandidate := ""
 	firstTimestamp := time.Time{}
 	if len(events) > 0 {
@@ -186,14 +188,16 @@ func projectGraph(state protocol.TaskState, events []protocol.Event, evidence []
 		case "CHECKPOINT_VERIFIED":
 			checkpointID := dataString(event.Data, "checkpoint_id")
 			nodeID := "checkpoint-" + nonempty(checkpointID, fmt.Sprintf("%d", event.Sequence))
+			candidateID := dataString(event.Data, "candidate_id")
 			source := lastCandidate
-			if state.Checkpoint != nil {
-				if candidateNode := candidateNodes[state.Checkpoint.CandidateID]; candidateNode != "" {
-					source = candidateNode
-				}
+			if candidateNode := candidateNodes[candidateID]; candidateNode != "" {
+				source = candidateNode
+			} else if state.Checkpoint != nil {
+				source = nonempty(candidateNodes[state.Checkpoint.CandidateID], source)
 			}
 			addNode(GraphNode{ID: nodeID, Kind: "checkpoint", Label: "Verified checkpoint", Subtitle: shortID(checkpointID), Status: "passed", Timestamp: event.Timestamp, Details: event.Data})
 			addEdge(nonempty(source, "goal"), nodeID, "admitted", "passed")
+			checkpointNodes[checkpointID] = nodeID
 		case "REGRESSION_DETECTED":
 			nodeID := fmt.Sprintf("regression-%d", event.Sequence)
 			addNode(GraphNode{ID: nodeID, Kind: "regression", Label: "Regression detected", Subtitle: humanize(dataString(event.Data, "reason")), Status: "failed", Timestamp: event.Timestamp, Details: event.Data})
@@ -237,6 +241,29 @@ func projectGraph(state protocol.TaskState, events []protocol.Event, evidence []
 		})
 		source := candidateNodes[item.CandidateID]
 		addEdge(nonempty(source, nonempty(lastCandidate, "goal")), nodeID, humanize(item.VerificationPhase), status)
+		evidenceNodes[item.EvidenceID] = nodeID
+	}
+
+	// A verified checkpoint is downstream of the admission evidence that
+	// certified it, not parallel to that evidence. Rewire the latest checkpoint
+	// using its typed evidence references while retaining backward-compatible
+	// candidate edges for older state without those references.
+	if state.Checkpoint != nil {
+		checkpointNode := checkpointNodes[state.Checkpoint.CheckpointID]
+		if checkpointNode != "" && len(state.Checkpoint.AdmissionEvidence) > 0 {
+			var bound []string
+			for _, evidenceID := range state.Checkpoint.AdmissionEvidence {
+				if nodeID := evidenceNodes[evidenceID]; nodeID != "" {
+					bound = append(bound, nodeID)
+				}
+			}
+			if len(bound) > 0 {
+				edges = removeEdgesTo(edges, checkpointNode)
+				for _, source := range bound {
+					addEdge(source, checkpointNode, "checkpoint", "passed")
+				}
+			}
+		}
 	}
 
 	if state.Receipt != nil {
@@ -245,7 +272,13 @@ func projectGraph(state protocol.TaskState, events []protocol.Event, evidence []
 			ID: "receipt", Kind: "receipt", Label: string(state.Receipt.Verdict), Subtitle: humanize(state.Receipt.Disposition), Status: status, Timestamp: state.Receipt.IssuedAt,
 			Details: map[string]any{"receipt_id": state.Receipt.ReceiptID, "rule_id": state.Receipt.RuleID, "disposition": state.Receipt.Disposition, "reason": state.Receipt.Reason, "digest": state.Receipt.ReceiptDigest},
 		})
-		addEdge(findLatest(nodes, "recertification", "checkpoint", "verifier", "candidate", "goal"), "receipt", "decision", status)
+		source := findLatest(nodes, "recertification", "checkpoint", "candidate", "goal")
+		addEdge(source, "receipt", "decision", status)
+		for _, evidenceID := range state.Receipt.CompletionEvidence {
+			if nodeID := evidenceNodes[evidenceID]; nodeID != "" && nodeID != source {
+				addEdge(nodeID, "receipt", "completion evidence", status)
+			}
+		}
 	}
 	if !state.AppliedAt.IsZero() {
 		addNode(GraphNode{ID: "apply", Kind: "apply", Label: "Applied", Subtitle: shortID(state.AppliedCommit), Status: "passed", Timestamp: state.AppliedAt, Details: map[string]any{"commit": state.AppliedCommit, "branch": state.AppliedBranch}})
@@ -256,6 +289,16 @@ func projectGraph(state protocol.TaskState, events []protocol.Event, evidence []
 		addEdge("goal", "integrity", "audit", "failed")
 	}
 	return nodes, edges
+}
+
+func removeEdgesTo(edges []GraphEdge, target string) []GraphEdge {
+	filtered := edges[:0]
+	for _, edge := range edges {
+		if edge.Target != target {
+			filtered = append(filtered, edge)
+		}
+	}
+	return filtered
 }
 
 func boundedOutput(output string) string {
