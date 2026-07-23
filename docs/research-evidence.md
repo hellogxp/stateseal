@@ -1,10 +1,9 @@
 # Research and evidence boundary
 
-StateSeal is informed by Loop Engineering practice, the author's
-[engineering notes](https://hellogxp.github.io/), adjacent open-source
-products, and the `paper-loop-engineering` research program. These inputs shape
-the problem decomposition; repository tests and compatibility evidence
-determine what this implementation can claim.
+StateSeal is informed by empirical studies of iterative code repair and by
+adjacent open-source systems. Those inputs shape the problem decomposition;
+repository tests and compatibility evidence determine what this implementation
+can claim.
 
 ## What the research supports
 

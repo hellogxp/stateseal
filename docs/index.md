@@ -9,6 +9,7 @@
 
 | Read this | When you need |
 | --- | --- |
+| [Artifact evaluation](../ARTIFACT.md) | Reproduce the build and deterministic conformance evidence from an anonymous source snapshot |
 | [Getting started](getting-started.md) | Installation and the first verified delivery |
 | [Runs console](runs-console.md) | Live all-runs overview, provenance DAG, evidence, and local security model |
 | [Localization policy](localization.md) | Supported locales, fallback rules, translation contract and CI |

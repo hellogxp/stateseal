@@ -133,7 +133,9 @@ See the [documentation index](docs/index.md) or
 [Getting started](docs/getting-started.md) for the complete installation,
 integration, first-project confirmation, delivery, and uninstall flow. A
 [Simplified Chinese guide](docs/zh-CN/getting-started.md) and localized
-documentation in seven additional languages are also available.
+documentation in seven additional languages are also available. Reviewers
+working from an anonymous source snapshot should use the self-contained
+[artifact evaluation guide](ARTIFACT.md).
 
 ## Policy
 

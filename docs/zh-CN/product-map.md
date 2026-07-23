@@ -100,7 +100,7 @@ Receipt 会记录每个 Verifier 的层级、来源、Evidence 和结果，同�
 
 | 优先级 | 目标 | 验收证据 |
 | --- | --- | --- |
-| P0 | 核心可靠与诚实结果模型 | Go race、34 个 SealBench case、Receipt Schema 兼容 |
+| P0 | 核心可靠与诚实结果模型 | Go race、35 个 SealBench case、Receipt Schema 兼容 |
 | P0 | 简洁可靠的 CLI | 一个目标命令、有用进度、一次交付确认、多技术栈 fixture |
 | P1 | 主流 Agent 一致性 | 固定版本 CLI/Desktop 实机证据，能力退化时自动降级 |
 | P1 | L2/L3 Verifier | 领域 Profile、受保护 CI/Runner Evidence 与明确 Authority |
