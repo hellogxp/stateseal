@@ -83,7 +83,7 @@
     <rect x="784" y="228" width="284" height="252" rx="22" fill="#101d30" stroke="#275745"/>
     <rect x="784" y="228" width="6" height="252" rx="3" fill="url(#green)"/>
     <circle cx="834" cy="282" r="24" fill="#14352f" stroke="#2cae7c"/>
-    <path d="M834 266 850 274v12c0 11-7 18-16 23-9-5-16-12-16-23v-12Z" fill="none" stroke="#48d6a4" stroke-width="2.5"/>
+    <path d="M834 264 848 271v10c0 8-5.5 14-14 19-8.5-5-14-11-14-19v-10Z" fill="none" stroke="#48d6a4" stroke-width="2.5" stroke-linejoin="round"/>
     <text x="870" y="278" class="tag" fill="#48d6a4">03 · DECIDE</text>
     <text x="814" y="332" class="step">Broker admission</text>
     <text x="814" y="368" class="copy">Policy selects a verified</text>
