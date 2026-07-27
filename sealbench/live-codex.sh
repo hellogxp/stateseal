@@ -28,6 +28,7 @@ git -C "$repo" commit -q -m "Initialize Codex lifecycle fixture"
 
 	"$seal" run --mode warn -- codex exec \
 		--ephemeral \
+		--ignore-user-config \
 		--dangerously-bypass-hook-trust \
 		-s workspace-write \
 		"Follow these steps exactly and use a separate shell command for each step. Do not combine commands. First run: cp fixtures/fixed.go.txt counter.go. Second run exactly: go test ./... . Wait for it to pass. Third run: cp fixtures/regressed.go.txt counter.go. Then finish immediately without running any more tools, without testing again, and without repairing the regression."

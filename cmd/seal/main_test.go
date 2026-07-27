@@ -327,7 +327,9 @@ func TestSingleGoalRunBootstrapsVerifiesAndApplies(t *testing.T) {
 	}
 	binDir := t.TempDir()
 	fakeCodex := filepath.Join(binDir, "codex")
-	if err := os.WriteFile(fakeCodex, []byte("#!/bin/sh\nprintf 'changed\\n' > app.txt\n"), 0o755); err != nil {
+	argsPath := filepath.Join(t.TempDir(), "codex-args")
+	fakeCodexScript := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" > %q\nprintf 'changed\\n' > app.txt\n", argsPath)
+	if err := os.WriteFile(fakeCodex, []byte(fakeCodexScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -344,6 +346,10 @@ func TestSingleGoalRunBootstrapsVerifiesAndApplies(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join(root, "app.txt"))
 	if err != nil || string(content) != "changed\n" {
 		t.Fatalf("verified change was not applied: %q %v", content, err)
+	}
+	launchedArgs, err := os.ReadFile(argsPath)
+	if err != nil || !strings.Contains(string(launchedArgs), "--ignore-user-config") {
+		t.Fatalf("managed Codex child inherited outer MCP configuration: %q %v", launchedArgs, err)
 	}
 	for _, want := range []string{"StateSeal · 受控开发", "Codex 已启动", "结束前独立复验", "验证通过，可以交付", "交付依据", "已将验证通过的代码应用"} {
 		if !strings.Contains(out.String(), want) {

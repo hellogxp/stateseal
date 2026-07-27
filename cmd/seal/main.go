@@ -231,9 +231,7 @@ func runCmd() *cobra.Command {
 			if err != nil {
 				return codedError{10, err}
 			}
-			if desktopMCPChild {
-				agentArgs = isolateManagedChild(agentName, agentArgs)
-			}
+			agentArgs = isolateManagedChild(agentName, agentArgs)
 			if taskID == "" {
 				taskID = newTaskID(goal, time.Now().UTC())
 			}
