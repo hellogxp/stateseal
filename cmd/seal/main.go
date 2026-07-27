@@ -22,7 +22,6 @@ import (
 	"github.com/hellogxp/stateseal/internal/identity"
 	processctl "github.com/hellogxp/stateseal/internal/process"
 	"github.com/hellogxp/stateseal/internal/store"
-	workspacepkg "github.com/hellogxp/stateseal/internal/workspace"
 	"github.com/hellogxp/stateseal/internal/worktree"
 	"github.com/hellogxp/stateseal/pkg/protocol"
 	"github.com/spf13/cobra"
@@ -178,17 +177,26 @@ func runCmd() *cobra.Command {
 			if goal == "" {
 				goal = strings.TrimSpace(strings.Join(args, " "))
 			}
+			if strings.TrimSpace(goal) == "" {
+				return codedError{10, fmt.Errorf("%s", locale.T(i18n.GoalRequired))}
+			}
+		} else if len(args) == 0 {
+			return codedError{10, fmt.Errorf("provide a command after --")}
 		}
-		root, err := workspacepkg.Resolve(".", repoPath)
+		routingGoal := goal
+		if legacy {
+			routingGoal = strings.Join(args, " ")
+		}
+		root, routing, err := resolveRunRepository(cmd, repoPath, routingGoal, locale, quiet || jsonOut)
 		if err != nil {
 			return codedError{10, err}
+		}
+		if !quiet && !jsonOut {
+			printWorkspaceRoute(cmd.OutOrStdout(), routing, locale)
 		}
 		var agentArgs []string
 		desktopMCPChild := os.Getenv("STATESEAL_DESKTOP_MCP_CHILD") == "1"
 		if !legacy {
-			if strings.TrimSpace(goal) == "" {
-				return codedError{10, fmt.Errorf("%s", locale.T(i18n.GoalRequired))}
-			}
 			settings, settingsErr := store.LoadProjectSettings(root)
 			if settingsErr != nil && !os.IsNotExist(settingsErr) {
 				return codedError{10, settingsErr}
@@ -240,9 +248,6 @@ func runCmd() *cobra.Command {
 				return codedError{10, err}
 			}
 		} else {
-			if len(args) == 0 {
-				return codedError{10, fmt.Errorf("provide a command after --")}
-			}
 			agentArgs = args
 		}
 		if err := identity.CheckpointIdentity(root); err != nil {
