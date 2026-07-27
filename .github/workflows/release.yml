@@ -91,17 +91,30 @@ jobs:
             --generate-notes \
             --title "StateSeal $GITHUB_REF_NAME" \
             "$release_flags"
-      - name: Verify installation from published assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STATESEAL_GITHUB_TOKEN: ${{ github.token }}
+      - name: Verify public installation from published assets
+        if: ${{ github.event.repository.visibility == 'public' }}
         run: |
           mkdir -p "$RUNNER_TEMP/stateseal-release" "$RUNNER_TEMP/stateseal-installed"
-          gh release download "$GITHUB_REF_NAME" \
-            --pattern install.sh \
-            --dir "$RUNNER_TEMP/stateseal-release"
+          curl --proto '=https' --tlsv1.2 -fsSL \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install.sh" \
+            -o "$RUNNER_TEMP/stateseal-release/install.sh"
           STATESEAL_INSTALL_DIR="$RUNNER_TEMP/stateseal-installed" \
             sh "$RUNNER_TEMP/stateseal-release/install.sh"
           "$RUNNER_TEMP/stateseal-installed/seal" version --json >"$RUNNER_TEMP/installed-version.json"
           grep -Fq "\"version\":\"$GITHUB_REF_NAME\"" "$RUNNER_TEMP/installed-version.json"
           grep -Fq "\"commit\":\"$RELEASE_COMMIT\"" "$RUNNER_TEMP/installed-version.json"
+      - name: Verify private installation from published assets
+        if: ${{ github.event.repository.visibility != 'public' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/stateseal-release"
+          gh release download "$GITHUB_REF_NAME" \
+            --pattern install.sh \
+            --pattern checksums.txt \
+            --pattern "stateseal_${GITHUB_REF_NAME#v}_linux_amd64.tar.gz" \
+            --dir "$RUNNER_TEMP/stateseal-release"
+          STATESEAL_INSTALL_FIXTURES="$RUNNER_TEMP/stateseal-release" \
+            EXPECTED_VERSION="$GITHUB_REF_NAME" \
+            EXPECTED_COMMIT="$RELEASE_COMMIT" \
+            sh scripts/test-install.sh "$RUNNER_TEMP/stateseal-release/install.sh"

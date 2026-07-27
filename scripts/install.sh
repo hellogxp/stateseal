@@ -4,7 +4,6 @@ set -eu
 repository=${STATESEAL_REPOSITORY:-hellogxp/stateseal}
 version=${STATESEAL_VERSION:-${STATESEAL_DEFAULT_VERSION:-latest}}
 install_dir=${STATESEAL_INSTALL_DIR:-$HOME/.local/bin}
-github_token=${STATESEAL_GITHUB_TOKEN:-}
 
 usage() {
 	cat <<'EOF'
@@ -16,7 +15,6 @@ Environment:
   STATESEAL_VERSION       Release tag or version (default: latest)
   STATESEAL_INSTALL_DIR   Destination directory (default: ~/.local/bin)
   STATESEAL_REPOSITORY    GitHub owner/repository (default: hellogxp/stateseal)
-  STATESEAL_GITHUB_TOKEN  Token used only when downloading from a private repository
 EOF
 }
 
@@ -34,21 +32,11 @@ for command in curl tar install awk grep; do
 done
 
 fetch() {
-	if [ -n "$github_token" ]; then
-		curl --proto '=https' --tlsv1.2 -fsSL \
-			-H "Authorization: Bearer $github_token" \
-			-H "X-GitHub-Api-Version: 2022-11-28" "$@"
-	else
-		curl --proto '=https' --tlsv1.2 -fsSL "$@"
-	fi
+	curl --proto '=https' --tlsv1.2 -fsSL "$@"
 }
 
 if [ "$version" = latest ]; then
-	if [ -n "$github_token" ]; then
-		latest_url=$(fetch -o /dev/null -w '%{url_effective}' "https://github.com/$repository/releases/latest")
-	else
-		latest_url=$(curl --proto '=https' --tlsv1.2 -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$repository/releases/latest")
-	fi
+	latest_url=$(fetch -o /dev/null -w '%{url_effective}' "https://github.com/$repository/releases/latest")
 	version=${latest_url##*/}
 fi
 case "$version" in v*) ;; *) version="v$version" ;; esac
