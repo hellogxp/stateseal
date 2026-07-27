@@ -46,10 +46,30 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
+```
 
-cd your-project
-seal integrate codex-desktop
-seal run "修复重复回调，并保持现有接口兼容"
+Codex 推荐安装仓库随附的 StateSeal Plugin。Plugin 已包含 Skill 与 MCP
+注册，MCP server 由已安装的 StateSeal Core 提供，因此不需要再单独安装一个
+“MCP 产品”：
+
+```bash
+codex plugin marketplace add /path/to/stateseal
+codex plugin add stateseal@stateseal
+```
+
+第一条命令只是把当前源码目录登记为本机 Codex 可发现的 Plugin marketplace；
+不会上传代码、注册线上账号，也不会额外安装一套 MCP 服务。正式 marketplace
+发行后可以隐藏这一步面向开发者的源码注册。
+
+安装后新建 Codex 任务，普通代码需求会自动且可见地介入。`@stateseal` 以及
+`/seal status`、`/seal on`、`/seal off`、`/seal run`、`/seal exclude`
+仅作为可选控制入口。项目首次启用合同和最终 Apply 仍使用 Agent 原生明确确认。
+
+Plugin 不可用时，可使用兼容安装或直接调用通用 CLI 边界：
+
+```bash
+seal install codex-desktop
+seal run --repo /path/to/repository "修复重复回调，并保持现有接口兼容"
 ```
 
 匿名评审或源码检出可在仓库中执行 `make install`，要求 Git 与 Go 1.24 或更高版本。
@@ -70,6 +90,12 @@ Runs Console 提供实时列表、状态溯源 DAG、验证器证据、可信事
 StateSeal 支持 Codex Desktop、Codex CLI、Claude Code 和 Qoder 的集成路径；
 其他终端 Agent 可通过 `seal run -- <command>` 使用同一验证协议。结构化 JSON、
 稳定规则 ID 和完成凭证可用于 CI、评测与研究复现。
+
+StateSeal 会区分“健康的验证拒绝”和“StateSeal 自身不可用”。前者在 enforce
+模式下仍然阻止未验证代码交付；确认能力、MCP、Store 或隔离 Worker 故障时，
+StateSeal 返回可见的降级状态，Agent 继续原生开发，并将结果明确标记为
+`UNVERIFIED`，不会伪造 Receipt。最终 Apply 永不自动放行；确认不可用或被拒绝
+时保留已验证 Checkpoint，用户源分支保持不变。
 
 ## 安全边界
 

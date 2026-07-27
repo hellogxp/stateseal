@@ -1,0 +1,20 @@
+{
+  "name": "stateseal",
+  "interface": {
+    "displayName": "StateSeal"
+  },
+  "plugins": [
+    {
+      "name": "stateseal",
+      "source": {
+        "source": "local",
+        "path": "./plugins/stateseal"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

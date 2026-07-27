@@ -22,6 +22,7 @@ import (
 	"github.com/hellogxp/stateseal/internal/identity"
 	processctl "github.com/hellogxp/stateseal/internal/process"
 	"github.com/hellogxp/stateseal/internal/store"
+	workspacepkg "github.com/hellogxp/stateseal/internal/workspace"
 	"github.com/hellogxp/stateseal/internal/worktree"
 	"github.com/hellogxp/stateseal/pkg/protocol"
 	"github.com/spf13/cobra"
@@ -56,7 +57,7 @@ func newRoot() *cobra.Command {
 	cmd := &cobra.Command{Use: "seal", Short: "Transactional admission for coding-agent changes", SilenceUsage: true, SilenceErrors: true}
 	cmd.Version = info.Version
 	cmd.SetVersionTemplate("seal {{.Version}}\n")
-	cmd.AddCommand(versionCmd(), integrateCmd(), mcpCmd(), desktopCmd(), setupCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd(), uiCmd())
+	cmd.AddCommand(versionCmd(), installCmd(), integrateCmd(), workspaceCmd(), mcpCmd(), desktopCmd(), setupCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd(), uiCmd())
 	return cmd
 }
 
@@ -153,7 +154,7 @@ func verifyCmd() *cobra.Command {
 }
 
 func runCmd() *cobra.Command {
-	var mode, source, agentName, goal, taskID, branch string
+	var mode, source, agentName, goal, taskID, branch, repoPath string
 	var apply, noApply, verbose, quiet, jsonOut, autonomous, yes, requireChange bool
 	cmd := &cobra.Command{Use: "run \"<goal>\"", Short: "Develop a goal with a coding Agent and deliver only verified changes", Args: cobra.ArbitraryArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		locale := i18n.Detect()
@@ -178,7 +179,7 @@ func runCmd() *cobra.Command {
 				goal = strings.TrimSpace(strings.Join(args, " "))
 			}
 		}
-		root, err := identity.GitRoot(".")
+		root, err := workspacepkg.Resolve(".", repoPath)
 		if err != nil {
 			return codedError{10, err}
 		}
@@ -432,6 +433,7 @@ func runCmd() *cobra.Command {
 	cmd.Flags().StringVar(&goal, "goal", "", "intended development outcome")
 	cmd.Flags().StringVar(&taskID, "task-id", "", "task identifier (generated from the goal by default)")
 	cmd.Flags().StringVar(&branch, "branch", "", "create this branch when applying the verified checkpoint")
+	cmd.Flags().StringVar(&repoPath, "repo", "", "Git repository path or name when running from a non-Git workspace")
 	return cmd
 }
 

@@ -119,7 +119,7 @@ func TestCodexDesktopIntegrationInstallsMCPWithoutReplacingUserConfig(t *testing
 	content := string(raw)
 	for _, expected := range []string{
 		`model = "gpt-5"`, `trust_level = "trusted"`, "[mcp_servers.stateseal]",
-		`args = ["mcp", "serve", "--agent", "codex"]`,
+		`args = ["mcp", "serve", "--agent", "codex", "--confirmation", "host-tool"]`,
 		"[mcp_servers.stateseal.tools.enable_project]", "[mcp_servers.stateseal.tools.apply_verified]",
 	} {
 		if !strings.Contains(content, expected) {
@@ -170,7 +170,7 @@ func TestStateSealMCPServerAdvertisesRoutingAndApprovalBoundaries(t *testing.T) 
 	}
 	defer clientSession.Close()
 
-	if instructions := clientSession.InitializeResult().Instructions; !strings.Contains(instructions, "inspect_project") || !strings.Contains(instructions, "Never claim") || !strings.Contains(instructions, "read-only") || !strings.Contains(instructions, "never bypass") {
+	if instructions := clientSession.InitializeResult().Instructions; !strings.Contains(instructions, "inspect_project") || !strings.Contains(instructions, "UNVERIFIED") || !strings.Contains(instructions, "read-only") || !strings.Contains(instructions, "must not be bypassed") {
 		t.Fatalf("MCP routing instructions are incomplete: %s", instructions)
 	}
 	listed, err := clientSession.ListTools(ctx, nil)
@@ -265,8 +265,9 @@ func TestMCPProjectEnablementBindsTheDisplayedPolicy(t *testing.T) {
 	if !settings.DesktopEnabled || settings.DesktopSurface != "mcp" || settings.DesktopPolicyDigest != enabled.PolicyDigest || !containsString(settings.DesktopAgents, "codex") {
 		t.Fatalf("Desktop policy binding is incomplete: %+v", settings)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".codex", "hooks.json")); !os.IsNotExist(err) {
-		t.Fatalf("Desktop MCP enablement unexpectedly installed project hooks: %v", err)
+	hooks, err := os.ReadFile(filepath.Join(root, ".codex", "hooks.json"))
+	if err != nil || !strings.Contains(string(hooks), adapterMarker("codex")) {
+		t.Fatalf("Desktop MCP enablement did not install protected project hooks: err=%v hooks=%s", err, hooks)
 	}
 	status, _ := identity.Git(root, "status", "--porcelain")
 	if strings.TrimSpace(string(status)) != "" {
@@ -346,8 +347,14 @@ func TestMCPProjectEnablementRequiresNativeUserConfirmation(t *testing.T) {
 	declined, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "enable_project", Arguments: map[string]any{
 		"repo_path": root, "setup_token": inspection.SetupToken,
 	}})
-	if err == nil && !declined.IsError {
-		t.Fatalf("enable_project ignored native user decline: %+v", declined)
+	if err != nil || declined.IsError {
+		t.Fatalf("enable_project did not return a recoverable decline: err=%v result=%+v", err, declined)
+	}
+	var declinedInspection mcpProjectInspection
+	decodeMCPStructuredContent(t, declined.StructuredContent, &declinedInspection)
+	if declinedInspection.ReasonCode != "USER_DECLINED_CONFIRMATION" || !declinedInspection.Unverified ||
+		declinedInspection.AuthorityStatus != "degraded" {
+		t.Fatalf("unexpected recoverable decline: %+v", declinedInspection)
 	}
 	if _, err := os.Stat(filepath.Join(root, "seal.yaml")); !os.IsNotExist(err) {
 		t.Fatalf("declined enablement changed the project: %v", err)
@@ -361,6 +368,114 @@ func TestMCPProjectEnablementRequiresNativeUserConfirmation(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "seal.yaml")); err != nil {
 		t.Fatalf("confirmed enablement did not create policy: %v", err)
+	}
+}
+
+func TestMCPProjectEnablementWithoutElicitationFailsOpen(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := initializeMCPTestRepo(t, "no-elicitation")
+	inspection, err := inspectMCPProject(root, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := newStateSealMCPServer("codex").Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer serverSession.Close()
+	client := mcp.NewClient(&mcp.Implementation{Name: "stateseal-no-elicitation", Version: "test"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+
+	missing, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "inspect_project", Arguments: map[string]any{
+		"repo_path": filepath.Join(root, "missing-workspace"),
+	}})
+	if err != nil || missing.IsError {
+		t.Fatalf("workspace inspection failure blocked the Agent: err=%v result=%+v", err, missing)
+	}
+	var missingInspection mcpProjectInspection
+	decodeMCPStructuredContent(t, missing.StructuredContent, &missingInspection)
+	if missingInspection.ReasonCode != "PROJECT_INSPECTION_FAILED" || !missingInspection.Unverified {
+		t.Fatalf("unexpected inspection degradation: %+v", missingInspection)
+	}
+
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "enable_project", Arguments: map[string]any{
+		"repo_path": root, "setup_token": inspection.SetupToken,
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("missing elicitation became a tool failure: err=%v result=%+v", err, result)
+	}
+	var degraded mcpProjectInspection
+	decodeMCPStructuredContent(t, result.StructuredContent, &degraded)
+	if degraded.ReasonCode != "CLIENT_CONFIRMATION_UNAVAILABLE" || degraded.AuthorityStatus != "degraded" ||
+		!degraded.Unverified || !strings.Contains(degraded.NextAction, "normal development workflow") {
+		t.Fatalf("unexpected fail-open result: %+v", degraded)
+	}
+	if _, err := os.Stat(filepath.Join(root, "seal.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("fail-open enablement changed project state: %v", err)
+	}
+}
+
+func TestMCPHostToolApprovalDoesNotRequireSecondElicitation(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := initializeMCPTestRepo(t, "host-tool-approval")
+	inspection, err := inspectMCPProject(root, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := newStateSealMCPServerWithConfirmation("codex", mcpConfirmationHostTool).Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer serverSession.Close()
+	client := mcp.NewClient(&mcp.Implementation{Name: "stateseal-host-tool", Version: "test"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientSession.Close()
+
+	result, err := clientSession.CallTool(ctx, &mcp.CallToolParams{Name: "enable_project", Arguments: map[string]any{
+		"repo_path": root, "setup_token": inspection.SetupToken,
+	}})
+	if err != nil || result.IsError {
+		t.Fatalf("host-approved tool requested a second confirmation: err=%v result=%+v", err, result)
+	}
+	var enabled mcpProjectInspection
+	decodeMCPStructuredContent(t, result.StructuredContent, &enabled)
+	if !enabled.Enabled || enabled.AuthorityStatus != "healthy" {
+		t.Fatalf("host-approved enablement failed: %+v", enabled)
+	}
+}
+
+func TestMCPWorkspaceRequiresExplicitRepositorySelection(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"api", "web"} {
+		initializeMCPTestRepoAt(t, filepath.Join(root, name), name)
+	}
+	inspection, err := inspectMCPWorkspace(root, "", "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inspection.ReasonCode != "REPOSITORY_SELECTION_REQUIRED" || len(inspection.Repositories) != 2 ||
+		inspection.AuthorityStatus != "needs_user_action" {
+		t.Fatalf("workspace did not require explicit selection: %+v", inspection)
+	}
+	selected, err := inspectMCPWorkspace(root, "web", "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.Project != "web" || selected.RepoRoot == "" || selected.AuthorityStatus != "needs_enablement" {
+		t.Fatalf("workspace selection failed: %+v", selected)
 	}
 }
 
@@ -471,8 +586,14 @@ printf 'package delivery\n\nimport "testing"\n\nfunc TestMessage(t *testing.T) {
 			"session_id": delivery.SessionID, "receipt_id": delivery.ReceiptID,
 		},
 	})
-	if err == nil && !declined.IsError {
-		t.Fatalf("apply_verified ignored the user's native decline: %+v", declined)
+	if err != nil || declined.IsError {
+		t.Fatalf("apply_verified did not preserve a recoverable pending state: err=%v result=%+v", err, declined)
+	}
+	var declinedApply desktopCommandResult
+	decodeMCPStructuredContent(t, declined.StructuredContent, &declinedApply)
+	if declinedApply.Stage != store.DesktopStagePendingApply || declinedApply.ReasonCode != "USER_DECLINED_CONFIRMATION" ||
+		declinedApply.SafeState == nil || !declinedApply.SafeState.CandidatePreserved {
+		t.Fatalf("unexpected declined apply state: %+v", declinedApply)
 	}
 	if _, err := os.Stat(filepath.Join(root, "message.go")); !os.IsNotExist(err) {
 		t.Fatalf("declined apply modified the source workspace: %v", err)
@@ -510,4 +631,39 @@ func decodeMCPStructuredContent(t *testing.T, value any, target any) {
 	if err := json.Unmarshal(raw, target); err != nil {
 		t.Fatalf("decode MCP structured content: %v\n%s", err, raw)
 	}
+}
+
+func initializeMCPTestRepo(t *testing.T, module string) string {
+	t.Helper()
+	return initializeMCPTestRepoAt(t, t.TempDir(), module)
+}
+
+func initializeMCPTestRepoAt(t *testing.T, root, module string) string {
+	t.Helper()
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Git(root, "config", "user.name", "Test User"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Git(root, "config", "user.email", "test@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/"+module+"\n\ngo 1.24\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Git(root, "add", "go.mod"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Git(root, "commit", "-m", "chore: initialize fixture"); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := identity.GitRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolved
 }

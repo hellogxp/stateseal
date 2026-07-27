@@ -12,12 +12,28 @@ GitHub Actions가 확정된 Git tag에서 빌드한 릴리스를 설치합니다
 curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
-seal integrate codex-desktop
-seal integrate status
-
-cd /path/to/project
-seal run "입력 검증을 추가하고 호환성을 유지하며 테스트 포함"
+codex plugin marketplace add /path/to/stateseal
+codex plugin add stateseal@stateseal
 ```
+
+Plugin에는 Skill과 MCP 등록이 포함되며 설치된 Core를 사용하므로 MCP를 별도로
+설치할 필요가 없습니다. `marketplace add`는 로컬 checkout만 등록하고 게시하거나
+업로드하지 않습니다. 새 Codex 작업의 일반 코드 변경 요청은 StateSeal을 자동으로,
+그리고 보이게 활성화합니다.
+
+Plugin을 사용할 수 없는 CLI/headless 환경에서는 저장소를 명시하세요.
+
+```bash
+seal run --repo /path/to/project "입력 검증을 추가하고 호환성을 유지하며 테스트 포함"
+```
+
+Git 저장소가 아닌 상위 Workspace에서는 하위 저장소를 탐색합니다. 여러 저장소가
+있으면 `seal workspace list`로 확인하고 `--repo`로 명시적으로 선택합니다.
+
+최초 프로젝트 계약과 최종 Apply는 명시적으로 확인합니다. StateSeal 자체의 확인,
+MCP, Store 또는 격리 Worker를 사용할 수 없더라도 일반 Agent 개발은 중단되지
+않으며 결과는 Receipt 없이 `UNVERIFIED`로 표시됩니다. 정상적인 enforce 정책의
+실제 검증 거부는 계속 유효합니다.
 
 익명 아티팩트 또는 소스 체크아웃에서는 Git과 Go 1.24 이상으로 `make install`을
 실행합니다.

@@ -62,12 +62,36 @@ From the source checkout, experience verified-checkpoint recovery end to end:
 make experience
 ```
 
-Then use StateSeal in your own repository:
+For Codex, install the repo-packaged StateSeal Plugin. The Plugin
+bundles the StateSeal Skill and MCP registration; it starts the MCP server from
+the installed StateSeal Core binary, so there is no separate MCP product to
+install:
 
 ```bash
-seal integrate codex-desktop   # once for this Agent on this computer
-cd your-project
+codex plugin marketplace add /path/to/stateseal
+codex plugin add stateseal@stateseal
+```
+
+The first command registers this source checkout as a local Plugin marketplace;
+it does not publish code, create an online account, or install another MCP
+service. A packaged marketplace release can hide this developer-only source
+registration step.
+
+Start a new Codex task after installation. Ordinary code-changing prompts
+activate StateSeal automatically; `@stateseal` and `/seal status`, `/seal on`,
+`/seal off`, `/seal run`, and `/seal exclude` remain optional explicit controls.
+The one-time project contract and final Apply remain explicit native
+confirmations.
+
+When Plugins are unavailable, use the compatibility installer or invoke the
+portable CLI boundary directly:
+
+```bash
+seal install codex-desktop
+# From a repository root:
 seal run "Fix duplicate callbacks that cause duplicate charges while preserving API compatibility"
+# From a non-Git workspace:
+seal run --repo /path/to/repository "Fix duplicate callbacks while preserving API compatibility"
 ```
 
 Open the local runs console from any directory:
@@ -86,30 +110,41 @@ Japanese, Korean, Spanish, Brazilian Portuguese, German, and French.
 
 ![StateSeal Runs Console](docs/assets/stateseal-runs-console.svg)
 
-Or stay inside Codex Desktop after the one-time integration, open the Git
-project, and describe the development goal normally:
+Stay inside Codex Desktop after Plugin installation, open a repository or a
+workspace containing repositories, and describe the development goal normally:
 
 ```text
 Fix duplicate callbacks that cause duplicate charges while preserving API compatibility
 ```
 
-The Desktop adapter routes code-changing requests through StateSeal's MCP
+The Plugin routes code-changing requests through StateSeal's MCP
 contract while leaving read-only explanation, search, and planning alone. On
-first use it shows the detected verification contract; StateSeal itself opens
-the native confirmation for `enable_project`. It then delegates implementation
-to an isolated child that cannot recursively invoke StateSeal, rejects an empty
+first use it shows the selected workspace, repository, same-type worker Agent,
+execution mode, and detected verification contract. The host's important-tool
+approval is the single confirmation for `enable_project`; StateSeal does not
+open a second nested elicitation. It then delegates implementation to an
+isolated worker that cannot recursively invoke StateSeal, rejects an empty
 development candidate even when existing tests pass, and returns a compact
-timeline plus structured evidence. StateSeal opens a separate native acceptance
-before `apply_verified` can change the user's branch.
+timeline plus structured evidence. A separate native acceptance is still
+required before `apply_verified` can change the user's branch.
 
-`seal integrate` non-destructively adds a user-level MCP server for Codex
-Desktop, keeps a safety backup, and removes only obsolete StateSeal Desktop
+`seal install` / `seal integrate` remain compatibility and repair surfaces.
+They non-destructively add a user-level MCP server for Codex
+Desktop, keep a safety backup, and remove only obsolete StateSeal Desktop
 hooks. Existing MCP servers, settings, and unrelated hooks are preserved. No
 `/hooks` command or `StateSeal:` prompt prefix is required. Codex Desktop
 controlled delivery passes deterministic MCP contract tests but remains
 experimental until the repaired path passes a pinned live Desktop conformance
 run. CLI
 adapters continue to use lifecycle hooks for intermediate candidate coverage.
+
+StateSeal distinguishes a healthy verification rejection from failure of its
+own authority path. A rejected enforce-mode candidate remains blocked. Missing
+confirmation capability, MCP startup failure, store failure, or worker startup
+failure returns a visible structured degraded result; ordinary Agent
+development continues and the outcome is labelled `UNVERIFIED` with no
+StateSeal receipt. Final Apply never fails open: a verified checkpoint remains
+pending and the source branch stays unchanged until explicit acceptance.
 
 On the first managed run in a repository, StateSeal shows the detected project
 type, exact admission and completion commands, and protected configuration. The
@@ -200,13 +235,15 @@ external protected gate. See [Verification model](docs/verification-model.md).
 
 | Command | Purpose |
 | --- | --- |
+| `seal install [agent]` | One-step compatibility installation; defaults to Codex Desktop and includes MCP registration |
 | `seal integrate <agent>` | Install a user-level Agent integration once per computer (`codex-desktop`, `codex-cli`, `claude-code`, or `qoder`) |
+| `seal workspace list [path]` | Discover Git repositories under a non-Git workspace |
 | `seal integrate status` | Show installed integrations and their honest support level |
 | `seal integrate doctor <agent>` | Validate configuration plus the MCP or lifecycle handshake |
 | `seal integrate uninstall <agent>` | Remove only StateSeal-owned integration entries |
 | `seal desktop status --session …` | Inspect durable Desktop session authority state (normally invoked by the adapter) |
 | `seal desktop recover --session …` | Recover an interrupted Desktop parent turn from durable task evidence |
-| `seal run "…"` | Detect or reuse an Agent, show trustworthy progress, independently verify the development loop, and offer delivery (`--verbose`, `--quiet`, and `--json` supported) |
+| `seal run "…"` | Detect or reuse an Agent, show trustworthy progress, independently verify the development loop, and offer delivery (`--repo` selects a repository from a non-Git workspace) |
 | `seal setup --agent …` | Explicitly configure a repository Agent integration |
 | `seal init` | Legacy policy-only initialization |
 | `seal verify -- …` | Verify the current tree and issue state-bound evidence |

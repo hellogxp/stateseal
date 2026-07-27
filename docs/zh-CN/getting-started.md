@@ -26,12 +26,28 @@ seal version
 如需先检查脚本，把 `| sh` 替换为 `| less`。匿名评审或源码检出可以执行
 `make install` 安装当前精确版本；源码安装要求 Git 与 Go 1.24 或更高版本。
 
-## 2. 集成 Agent
+## 2. 安装 Plugin 或集成 Agent
 
-根据本机使用的 Agent 执行一次：
+Codex 推荐使用 StateSeal Plugin。Plugin 已打包自动意图路由 Skill 与 MCP
+注册；只需先安装 StateSeal Core，不需要单独安装 MCP：
 
 ```bash
-seal integrate codex-desktop
+codex plugin marketplace add /path/to/stateseal
+codex plugin add stateseal@stateseal
+```
+
+`marketplace add` 只把当前源码目录登记为这台机器上的 Codex Plugin 目录。它不会
+发布 Plugin、上传仓库、创建线上账号，也不会安装第二套 MCP server；正式
+marketplace 发行可以隐藏这一步源码开发操作。
+
+安装后新建 Codex 任务。普通代码需求会自动触发 StateSeal；`@stateseal` 和
+`/seal status`、`/seal on`、`/seal off`、`/seal run`、`/seal exclude`
+仅是可选控制面。
+
+没有 Plugin 的宿主、CLI/headless 或修复场景使用一键安装命令：
+
+```bash
+seal install codex-desktop
 # 或：seal integrate claude-code
 # 或：seal integrate qoder
 ```
@@ -52,13 +68,21 @@ seal integrate uninstall codex-desktop
 experimental。Claude Code 与 Qoder 当前完成的是生命周期基础；其 Desktop
 MCP 闭环仍在兼容性矩阵中单独跟踪。`seal run` 是已经完成实机验证的通用入口。
 
-## 3. 在项目中启动任务
+## 3. 通用 CLI 路径
 
-进入 Git 项目根目录：
+Plugin 不可用、CLI/headless、CI 或需要显式边界时，可以直接指定仓库：
 
 ```bash
-cd /path/to/your-project
-seal run "增加输入校验，保持兼容，并补充完整测试"
+seal run --repo /path/to/your-project \
+  "增加输入校验，保持兼容，并补充完整测试"
+```
+
+也可以在仓库根目录省略 `--repo`。如果当前目录不是 Git 仓库，StateSeal 会发现
+其中的 Git 子仓库；只有一个时可以自动选择，多个时必须明确选择：
+
+```bash
+seal workspace list /path/to/workspace
+seal run --repo /path/to/workspace/service-a "增加输入校验并补充测试"
 ```
 
 项目首次使用时，StateSeal 会先展示最低交付合同：
@@ -128,17 +152,20 @@ StateSeal · 验收结果
 
 ## Codex Desktop 使用路径
 
-执行一次 `seal integrate codex-desktop` 并重启应用后，在 Codex Desktop 中选择
-本地环境、打开 Git 项目，然后正常输入开发目标：
+安装 Plugin 并新建任务后，在 Codex Desktop 中选择本地环境，打开 Git 项目或包含
+多个 Git 子仓库的 Workspace，然后正常输入开发目标。仅在 Plugin 不可用或修复旧
+安装时才需要 `seal install codex-desktop`：
 
 ```text
 增加输入校验，保持兼容，并补充完整测试
 ```
 
 StateSeal MCP 会先只读识别项目。只读解释、搜索和规划不进入受控交付。项目
-首次出现代码变更任务时，原对话展示自动发现的 Admission、Completion、受保护
+首次出现代码变更任务时，原对话展示 Workspace、Repository、Worker Agent、
+隔离执行方式，以及自动发现的 Admission、Completion、受保护
 路径和剩余风险；随后 StateSeal 直接发起原生确认，用户确认一次
-`enable_project`。StateSeal 将合同提交为 `seal.yaml`，后续普通
+`enable_project`。宿主的重要工具授权就是这一次确认，不再嵌套第二次
+elicitation。StateSeal 将合同和 repo-local Hook 提交为受保护项目配置，后续普通
 开发目标不再重复确认，除非策略发生变化。
 
 编码与自测由受控 Codex 子进程在隔离候选区完成；用户源目录在此期间不变。
@@ -147,3 +174,13 @@ StateSeal MCP 会先只读识别项目。只读解释、搜索和规划不进入
 完全匹配、非空且已验证的 receipt
 才能应用到 feature 分支；拒绝则保持用户分支不变。普通用户无需输入任何
 `seal desktop` 内部命令。
+
+如果打开的是非 Git 父目录，StateSeal 会发现其中的 Git 子仓库。只有一个时可
+直接选择；存在多个时必须展示列表并由用户明确选择，绝不默认取第一个。CLI
+可使用 `seal workspace list` 查看，并通过 `seal run --repo <path> "…"` 选择。
+
+StateSeal 自身的确认、MCP、Store 或隔离 Worker 故障不会伪装成验证失败，也
+不会终止普通开发。Agent 会回到原生工作流，并将结果醒目标记为
+`UNVERIFIED`，且不生成 StateSeal Receipt。健康状态下 enforce 策略的真实
+验证拒绝仍然有效。最终 Apply 永不自动放行；确认不可用或被拒绝时保留
+Checkpoint，用户源分支保持不变。

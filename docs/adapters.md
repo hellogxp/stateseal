@@ -27,15 +27,23 @@ lifecycle integration therefore reduces checkpoint coverage to
 StateSeal has two integration scopes:
 
 ```text
-user scope       seal integrate <agent>       once per Agent and computer
-project scope    first seal run / seal setup  once per repository
+Plugin scope     Skill + MCP registration      once per Agent and computer
+user scope       seal install / integrate      CLI, headless, and repair fallback
+project scope    first code task / seal setup  once per repository
 ```
 
-User scope preserves existing configuration. Desktop surfaces use MCP when the
-host provides a stable MCP client; CLI surfaces use lifecycle entry points for
-intermediate candidate coverage:
+The Codex Plugin includes the routing Skill and MCP registration, so users do
+not install a separate MCP server. StateSeal Core remains required because it
+owns the broker, worktrees, verifier, ledger, receipt, and Apply transaction.
+User-scope compatibility installation preserves existing configuration.
+From a source checkout, `codex plugin marketplace add /path/to/stateseal` only
+registers that checkout as a local Plugin catalog; it does not publish code or
+install MCP separately. Desktop surfaces use MCP when the host provides a
+stable MCP client; CLI surfaces use lifecycle entry points for intermediate
+candidate coverage:
 
 ```bash
+seal install codex-desktop
 seal integrate codex-desktop
 seal integrate claude-code
 seal integrate qoder
@@ -47,7 +55,7 @@ seal integrate uninstall qoder
 
 Installation alone is not proof of end-to-end compatibility. Codex Desktop now
 uses a local stdio MCP server with explicit tool schemas, routing instructions,
-server-initiated native confirmation for project enablement and final apply,
+a single host important-tool approval for project enablement and final apply,
 durable session state, isolated Agent execution, exact receipt binding, and
 recovery surfaces. The managed child drops outer user configuration and the MCP
 server exposes no recursive tools inside a child run. Development tasks reject
@@ -62,6 +70,19 @@ binds the user's native approval to the exact displayed policy digest.
 `apply_verified` accepts only the session-bound admitted receipt. The MCP server
 returns structured progress and evidence, while internal `seal desktop`
 commands remain recovery surfaces rather than user workflow.
+
+MCP capability loss is not a verification rejection. Missing elicitation,
+startup, store, or worker capability returns a structured degraded result and
+the host Agent continues its normal workflow with a visible `UNVERIFIED` label.
+StateSeal issues no receipt for that path. Final Apply never fails open: the
+verified checkpoint remains pending and the source branch remains unchanged.
+
+When a Desktop project is enabled, StateSeal commits both `seal.yaml` and the
+selected Agent's repository-local lifecycle integration. This connects the
+Plugin's semantic MCP routing to deterministic proposal tool/Stop boundaries.
+If a non-Git workspace contains multiple repositories, the MCP result lists
+them and requires an explicit selection; CLI users use `seal workspace list`
+and `seal run --repo`.
 
 MCP routing is host-Agent mediated: the instructions distinguish code-changing
 work from explanation, search, planning, and review-only work, but MCP alone is

@@ -1,0 +1,39 @@
+{
+  "name": "stateseal",
+  "version": "0.1.1+codex.20260727134658",
+  "description": "Visible, transactional verified delivery for coding-agent changes",
+  "author": {
+    "name": "StateSeal Contributors",
+    "url": "https://github.com/hellogxp/stateseal"
+  },
+  "homepage": "https://github.com/hellogxp/stateseal",
+  "repository": "https://github.com/hellogxp/stateseal",
+  "license": "Apache-2.0",
+  "keywords": [
+    "coding-agent",
+    "verified-delivery",
+    "mcp",
+    "git",
+    "checkpoint"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "StateSeal",
+    "shortDescription": "Verified delivery for coding-agent changes.",
+    "longDescription": "StateSeal visibly routes code-changing tasks through an isolated proposal, independent verification, a state-bound receipt, and explicit final Apply. Read-only work stays on the Agent's normal path, and StateSeal infrastructure failures degrade visibly without blocking ordinary development.",
+    "developerName": "StateSeal Contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/hellogxp/stateseal",
+    "defaultPrompt": [
+      "Show StateSeal status for this workspace",
+      "Develop this change through verified delivery",
+      "Exclude this repository from StateSeal"
+    ],
+    "brandColor": "#2F6FEB"
+  },
+  "mcpServers": "./.mcp.json"
+}

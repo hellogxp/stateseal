@@ -46,11 +46,16 @@ GitHub Actions が確定した Git tag から構築したリリースをイン�
 curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
-cd your-project
-seal integrate codex-desktop
-seal run "重複コールバックを修正し、互換性を維持する"
-seal ui
+codex plugin marketplace add /path/to/stateseal
+codex plugin add stateseal@stateseal
 ```
+
+Plugin は Skill と MCP 登録を同梱し、インストール済みの StateSeal Core を
+使用します。MCP を別途インストールする必要はありません。最初のコマンドは
+ローカルのソース checkout を Codex に登録するだけで、公開やアップロードは
+行いません。新しい Codex タスクでは通常のコード変更要求が自動かつ可視的に
+StateSeal を起動し、最初のプロジェクト契約と最終 Apply は明示的に確認されます。
+Plugin を利用できない場合は `seal run --repo /path/to/project "…"` を使用します。
 
 匿名レビューまたはソースチェックアウトでは、Git と Go 1.24 以降を用意して
 `make install` を実行できます。

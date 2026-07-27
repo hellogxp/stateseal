@@ -18,6 +18,11 @@ import (
 )
 
 type desktopCommandResult struct {
+	Workspace            string                         `json:"workspace,omitempty"`
+	Repository           string                         `json:"repository,omitempty"`
+	Agent                string                         `json:"agent,omitempty"`
+	ExecutionMode        string                         `json:"execution_mode,omitempty"`
+	DeliveryStages       []string                       `json:"delivery_stages,omitempty"`
 	SessionID            string                         `json:"session_id,omitempty"`
 	Stage                string                         `json:"stage"`
 	Verdict              protocol.Verdict               `json:"verdict,omitempty"`
@@ -38,6 +43,12 @@ type desktopCommandResult struct {
 	ResidualRisks        []string                       `json:"residual_risks,omitempty"`
 	VerificationCoverage *protocol.VerificationCoverage `json:"verification_coverage,omitempty"`
 	LivenessImpact       *protocol.LivenessImpact       `json:"liveness_impact,omitempty"`
+	AuthorityStatus      string                         `json:"authority_status,omitempty"`
+	ReasonCode           string                         `json:"reason_code,omitempty"`
+	Retryable            bool                           `json:"retryable,omitempty"`
+	SafeState            *mcpSafeState                  `json:"safe_state,omitempty"`
+	AllowedActions       []string                       `json:"allowed_actions,omitempty"`
+	Unverified           bool                           `json:"unverified,omitempty"`
 	NextAction           string                         `json:"next_action"`
 }
 
@@ -330,7 +341,9 @@ func applyDesktopSession(sessionID, expectedReceiptID string) (desktopCommandRes
 	}
 	branch := defaultDeliveryBranch(session.RepoRoot, session.TaskID)
 	if err := applyCheckpoint(session.RepoRoot, &state, branch); err != nil {
-		session.Stage, session.LastError = store.DesktopStageFailed, err.Error()
+		// Keep the admitted checkpoint recoverable. Apply is a separate
+		// transaction and a runtime failure must not erase delivery authority.
+		session.Stage, session.LastError = store.DesktopStagePendingApply, err.Error()
 		_ = store.SaveDesktopSession(session)
 		return desktopCommandResult{}, fmt.Errorf("apply verified checkpoint: %s", session.LastError)
 	}
@@ -344,7 +357,8 @@ func applyDesktopSession(sessionID, expectedReceiptID string) (desktopCommandRes
 	return desktopCommandResult{
 		SessionID: session.SessionID, Stage: session.Stage, Verdict: protocol.VerdictAdmitted,
 		TaskID: session.TaskID, ReceiptID: session.ReceiptID, Branch: state.AppliedBranch,
-		NextAction: "tell the user that the exact verified checkpoint is now applied on the feature branch",
+		AuthorityStatus: "healthy",
+		NextAction:      "tell the user that the exact verified checkpoint is now applied on the feature branch",
 	}, nil
 }
 

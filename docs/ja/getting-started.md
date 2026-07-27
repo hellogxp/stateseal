@@ -14,19 +14,31 @@ GitHub Actions が確定した Git tag から構築したリリースをイン�
 curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
-seal integrate codex-desktop
-seal integrate status
+codex plugin marketplace add /path/to/stateseal
+codex plugin add stateseal@stateseal
 ```
+
+Plugin は Skill と MCP 登録を同梱し、インストール済み Core を使用します。
+MCP の別インストールは不要です。`marketplace add` はローカル checkout の登録
+だけを行い、公開やアップロードはしません。新しい Codex タスクでは通常の
+コード変更要求が自動かつ可視的に StateSeal を起動します。
 
 匿名アーティファクトまたはソースチェックアウトでは、Git と Go 1.24 以降を
 用意して `make install` を実行します。
 
-プロジェクトのルートで最初のタスクを開始します。
+Plugin を利用できない場合、CLI/headless ではリポジトリを明示します。
 
 ```bash
-cd /path/to/project
-seal run "入力検証を追加し、互換性を維持し、テストを含める"
+seal run --repo /path/to/project "入力検証を追加し、互換性を維持し、テストを含める"
 ```
+
+非 Git の親 Workspace では子リポジトリを検出し、複数ある場合は
+`seal workspace list` で確認して `--repo` で明示的に選択します。
+
+最初のプロジェクト契約と最終 Apply は明示的に確認します。StateSeal 自身の
+確認、MCP、Store、隔離 Worker が利用できない場合、通常の Agent 開発は停止せず、
+結果を `UNVERIFIED` と表示して Receipt を発行しません。正常な enforce
+ポリシーによる検証拒否は引き続き有効です。
 
 初回は StateSeal が検出した admission、completion、保護対象を表示します。
 そのコマンドが最低限の配信ゲートとして妥当な場合だけ確認してください。

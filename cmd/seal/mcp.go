@@ -17,15 +17,22 @@ import (
 	"github.com/hellogxp/stateseal/internal/i18n"
 	"github.com/hellogxp/stateseal/internal/identity"
 	"github.com/hellogxp/stateseal/internal/store"
+	workspacepkg "github.com/hellogxp/stateseal/internal/workspace"
 	"github.com/hellogxp/stateseal/pkg/protocol"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
 
-const stateSealMCPInstructions = "StateSeal is the verified-delivery authority for code-changing work in local Git projects. Use it for implementation, fixes, refactors, migrations, generated code, and tests; do not invoke it for explanation, search, planning, or other read-only work. For a code-changing request, call inspect_project before editing. If the project is excluded, do not call enable_project or start_delivery; automatic StateSeal routing does not apply, so continue using the Agent's normal workflow. If the project is enabled, call start_delivery and never edit the source workspace directly. If it is not enabled, present the concise verification contract and call enable_project; StateSeal itself elicits the user's native confirmation. After delivery, present changed files, checks, durations, exact code state, coverage, receipt, and residual risks. Then call apply_verified; StateSeal itself elicits a separate final acceptance. Never claim StateSeal verification without an admitted non-empty receipt, and never bypass a failed or rejected StateSeal delivery by editing the source workspace."
+const stateSealMCPInstructions = "StateSeal is the visible verified-delivery authority for code-changing work. Do not invoke it for explanation, search, planning, or other read-only work. For a code-changing request, call inspect_project before editing and show the selected Workspace, Repository, Agent, execution mode, and delivery stages. If multiple repositories are returned, let the user select one. If the project is excluded or StateSeal reports degraded or unavailable authority, continue with the Agent's normal workflow, clearly label the delivery UNVERIFIED, and never claim a StateSeal receipt. StateSeal infrastructure failures must not stop ordinary development. If the project is enabled, call start_delivery and do not edit the source workspace directly. If it is not enabled, present the verification contract and call enable_project. A healthy StateSeal verification rejection remains authoritative in enforce mode and must not be bypassed. After an admitted delivery, present changed files, checks, durations, exact code state, coverage, receipt, and residual risks, then call apply_verified. Final apply always requires explicit user approval; if approval is unavailable or declined, preserve the verified checkpoint and leave the source branch unchanged."
+
+const (
+	mcpConfirmationElicitation = "elicitation"
+	mcpConfirmationHostTool    = "host-tool"
+)
 
 type mcpProjectInput struct {
-	RepoPath string `json:"repo_path" jsonschema:"absolute path to the Git project currently open in the Agent desktop"`
+	RepoPath   string `json:"repo_path" jsonschema:"absolute path to the workspace or Git project currently open in the Agent desktop"`
+	Repository string `json:"repository,omitempty" jsonschema:"optional repository path or unambiguous name when the workspace contains multiple Git repositories"`
 }
 
 type mcpEnableProjectInput struct {
@@ -48,23 +55,38 @@ type mcpApplyInput struct {
 }
 
 type mcpProjectInspection struct {
-	Project              string            `json:"project"`
-	RepoRoot             string            `json:"repo_root"`
-	Enabled              bool              `json:"enabled"`
-	Excluded             bool              `json:"excluded"`
-	ExclusionReason      string            `json:"exclusion_reason,omitempty"`
-	ExcludedAt           string            `json:"excluded_at,omitempty"`
-	ConfirmationRequired bool              `json:"confirmation_required"`
-	Admission            []string          `json:"admission"`
-	Completion           []string          `json:"completion"`
-	Protected            []string          `json:"protected"`
-	Execution            string            `json:"execution"`
-	ResidualRisks        []string          `json:"residual_risks,omitempty"`
-	VerifierProvenance   []mcpVerifierPlan `json:"verifier_provenance"`
-	SetupToken           string            `json:"setup_token,omitempty"`
-	PolicyDigest         string            `json:"policy_digest"`
-	ConfigCommit         string            `json:"config_commit,omitempty"`
-	NextAction           string            `json:"next_action"`
+	Workspace            string                    `json:"workspace,omitempty"`
+	Project              string                    `json:"project"`
+	RepoRoot             string                    `json:"repo_root"`
+	Repositories         []workspacepkg.Repository `json:"repositories,omitempty"`
+	Agent                string                    `json:"agent,omitempty"`
+	Enabled              bool                      `json:"enabled"`
+	Excluded             bool                      `json:"excluded"`
+	ExclusionReason      string                    `json:"exclusion_reason,omitempty"`
+	ExcludedAt           string                    `json:"excluded_at,omitempty"`
+	ConfirmationRequired bool                      `json:"confirmation_required"`
+	Admission            []string                  `json:"admission"`
+	Completion           []string                  `json:"completion"`
+	Protected            []string                  `json:"protected"`
+	Execution            string                    `json:"execution"`
+	ResidualRisks        []string                  `json:"residual_risks,omitempty"`
+	VerifierProvenance   []mcpVerifierPlan         `json:"verifier_provenance"`
+	SetupToken           string                    `json:"setup_token,omitempty"`
+	PolicyDigest         string                    `json:"policy_digest"`
+	ConfigCommit         string                    `json:"config_commit,omitempty"`
+	AuthorityStatus      string                    `json:"authority_status,omitempty"`
+	ReasonCode           string                    `json:"reason_code,omitempty"`
+	Reason               string                    `json:"reason,omitempty"`
+	Retryable            bool                      `json:"retryable,omitempty"`
+	SafeState            *mcpSafeState             `json:"safe_state,omitempty"`
+	AllowedActions       []string                  `json:"allowed_actions,omitempty"`
+	Unverified           bool                      `json:"unverified,omitempty"`
+	NextAction           string                    `json:"next_action"`
+}
+
+type mcpSafeState struct {
+	SourceWorkspaceChanged bool `json:"source_workspace_changed"`
+	CandidatePreserved     bool `json:"candidate_preserved"`
 }
 
 type mcpVerifierPlan struct {
@@ -76,7 +98,7 @@ type mcpVerifierPlan struct {
 
 func mcpCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "mcp", Short: "Expose StateSeal verified delivery through Model Context Protocol"}
-	var agent string
+	var agent, confirmation string
 	serve := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the local StateSeal MCP server over stdio",
@@ -85,15 +107,23 @@ func mcpCmd() *cobra.Command {
 			if !isSupportedAgent(agent) {
 				return codedError{10, fmt.Errorf("unsupported host agent %q", agent)}
 			}
-			return newStateSealMCPServer(agent).Run(cmd.Context(), &mcp.StdioTransport{})
+			if confirmation != mcpConfirmationElicitation && confirmation != mcpConfirmationHostTool {
+				return codedError{10, fmt.Errorf("unsupported confirmation mode %q", confirmation)}
+			}
+			return newStateSealMCPServerWithConfirmation(agent, confirmation).Run(cmd.Context(), &mcp.StdioTransport{})
 		},
 	}
 	serve.Flags().StringVar(&agent, "agent", "codex", "coding Agent used for isolated delivery")
+	serve.Flags().StringVar(&confirmation, "confirmation", mcpConfirmationElicitation, "user confirmation source: elicitation or host-tool")
 	cmd.AddCommand(serve)
 	return cmd
 }
 
 func newStateSealMCPServer(agent string) *mcp.Server {
+	return newStateSealMCPServerWithConfirmation(agent, mcpConfirmationElicitation)
+}
+
+func newStateSealMCPServerWithConfirmation(agent, confirmation string) *mcp.Server {
 	info := buildinfo.Current()
 	server := mcp.NewServer(&mcp.Implementation{
 		Name: "stateseal", Title: "StateSeal Verified Delivery", Version: info.Version,
@@ -105,36 +135,50 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "inspect_project", Title: "Inspect StateSeal project policy",
-		Description: "Inspect the current Git project without modifying it. Use this first for every code-changing request so StateSeal can determine whether one-time project enablement is required and show the exact verification contract.",
+		Description: "Inspect the current workspace without modifying it, discover contained Git repositories, select a repository, and show the exact verification contract. Use this first for every code-changing request.",
 		Annotations: mcpAnnotations(true, false, true, false),
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input mcpProjectInput) (*mcp.CallToolResult, mcpProjectInspection, error) {
-		inspection, err := inspectMCPProject(input.RepoPath, agent)
-		return nil, inspection, err
+		inspection, err := inspectMCPWorkspace(input.RepoPath, input.Repository, agent)
+		if err != nil {
+			return nil, degradedProjectInspectionForError(input.RepoPath, "PROJECT_INSPECTION_FAILED", err), nil
+		}
+		return nil, inspection, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "enable_project", Title: "Enable StateSeal for this project",
 		Description: "Enable the exact verification contract previously returned by inspect_project. This is a one-time project change and must be shown through the Agent's native approval UI before execution.",
-		Annotations: mcpAnnotations(false, false, true, false),
+		Annotations: mcpAnnotations(false, true, true, false),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input mcpEnableProjectInput) (*mcp.CallToolResult, mcpProjectInspection, error) {
 		inspection, err := inspectMCPProject(input.RepoPath, agent)
 		if err != nil {
-			return nil, mcpProjectInspection{}, err
+			return nil, degradedProjectInspectionForError(input.RepoPath, "PROJECT_INSPECTION_FAILED", err), nil
 		}
 		if inspection.Excluded {
-			return nil, mcpProjectInspection{}, fmt.Errorf("project is excluded from automatic StateSeal integration: %s; run `seal integrate include %s` to allow fresh enablement", inspection.ExclusionReason, inspection.RepoRoot)
+			inspection.AuthorityStatus = "not_applicable"
+			inspection.Unverified = true
+			inspection.AllowedActions = []string{"continue_unverified", "include_project"}
+			inspection.NextAction = "continue with the Agent's normal workflow and disclose that StateSeal is excluded; do not claim verified delivery"
+			return nil, inspection, nil
+		}
+		if !inspection.Enabled && (input.SetupToken == "" || input.SetupToken != inspection.SetupToken) {
+			return nil, mcpProjectInspection{}, fmt.Errorf("verification contract changed or was not inspected; call inspect_project again")
 		}
 		if !inspection.Enabled {
 			locale := i18n.Detect()
 			message := integrationText(locale,
 				fmt.Sprintf("Enable StateSeal for %s? Admission: %s. Completion: %s. Policy: %s.", inspection.Project, strings.Join(inspection.Admission, "; "), strings.Join(inspection.Completion, "; "), inspection.PolicyDigest),
 				fmt.Sprintf("是否为项目 %s 启用 StateSeal 受控交付？Admission：%s。Completion：%s。策略：%s。", inspection.Project, strings.Join(inspection.Admission, "；"), strings.Join(inspection.Completion, "；"), inspection.PolicyDigest))
-			if err := elicitMCPConfirmation(ctx, req, message); err != nil {
-				return nil, mcpProjectInspection{}, err
+			outcome := confirmMCPAction(ctx, req, confirmation, message)
+			if outcome != "accepted" {
+				return nil, degradedProjectInspection(inspection, outcome), nil
 			}
 		}
 		inspection, err = enableMCPProject(input.RepoPath, input.SetupToken, agent)
-		return nil, inspection, err
+		if err != nil {
+			return nil, degradedProjectInspectionForError(input.RepoPath, "PROJECT_ENABLEMENT_FAILED", err), nil
+		}
+		return nil, inspection, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -143,7 +187,10 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 		Annotations: mcpAnnotations(false, false, false, true),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, input mcpStartDeliveryInput) (*mcp.CallToolResult, desktopCommandResult, error) {
 		result, err := startMCPDelivery(ctx, req, input, agent)
-		return nil, result, err
+		if err != nil {
+			return nil, degradedDesktopResult(input.RepoPath, err), nil
+		}
+		return nil, result, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -152,7 +199,10 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 		Annotations: mcpAnnotations(true, false, true, false),
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input mcpDeliveryInput) (*mcp.CallToolResult, desktopCommandResult, error) {
 		result, err := desktopSessionResult(input.SessionID)
-		return nil, result, err
+		if err != nil {
+			return nil, degradedDesktopResult("", err), nil
+		}
+		return nil, result, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -167,11 +217,36 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 		message := integrationText(locale,
 			fmt.Sprintf("Accept and apply StateSeal receipt %s to the project? Only the exact verified checkpoint will be applied.", input.ReceiptID),
 			fmt.Sprintf("是否接受并应用 StateSeal Receipt %s？只会应用与该凭证绑定的确切验证代码。", input.ReceiptID))
-		if err := elicitMCPConfirmation(ctx, req, message); err != nil {
-			return nil, desktopCommandResult{}, err
+		outcome := confirmMCPAction(ctx, req, confirmation, message)
+		if outcome != "accepted" {
+			result, err := desktopSessionResult(input.SessionID)
+			if err != nil {
+				return nil, desktopCommandResult{}, err
+			}
+			result.AuthorityStatus = "needs_user_action"
+			result.ReasonCode = confirmationReasonCode(outcome)
+			result.Retryable = outcome == "unavailable"
+			result.SafeState = &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: true}
+			result.AllowedActions = []string{"retry_apply", "reject_delivery", "continue_other_work"}
+			result.NextAction = "keep the verified checkpoint pending and leave the source branch unchanged; the user may retry apply or reject it later"
+			return nil, result, nil
 		}
 		result, err := applyDesktopSession(input.SessionID, input.ReceiptID)
-		return nil, result, err
+		if err != nil {
+			pending, statusErr := desktopSessionResult(input.SessionID)
+			if statusErr != nil {
+				return nil, degradedDesktopResult("", err), nil
+			}
+			pending.AuthorityStatus = "degraded"
+			pending.ReasonCode = "APPLY_RUNTIME_FAILED"
+			pending.Reason = err.Error()
+			pending.Retryable = true
+			pending.SafeState = &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: true}
+			pending.AllowedActions = []string{"retry_apply", "reject_delivery", "diagnose"}
+			pending.NextAction = "keep the verified checkpoint pending, leave the source branch unchanged, and offer retry or rejection"
+			return nil, pending, nil
+		}
+		return nil, result, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -180,7 +255,10 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 		Annotations: mcpAnnotations(false, false, true, false),
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input mcpDeliveryInput) (*mcp.CallToolResult, desktopCommandResult, error) {
 		result, err := rejectDesktopSession(input.SessionID)
-		return nil, result, err
+		if err != nil {
+			return nil, degradedDesktopResult("", err), nil
+		}
+		return nil, result, nil
 	})
 
 	return server
@@ -200,18 +278,59 @@ func validateDesktopApplyRequest(sessionID, receiptID string) error {
 	return nil
 }
 
-func elicitMCPConfirmation(ctx context.Context, req *mcp.CallToolRequest, message string) error {
+func confirmMCPAction(ctx context.Context, req *mcp.CallToolRequest, mode, message string) string {
+	if mode == mcpConfirmationHostTool {
+		return "accepted"
+	}
 	result, err := req.Session.Elicit(ctx, &mcp.ElicitParams{
 		Mode: "form", Message: message,
 		RequestedSchema: &jsonschema.Schema{Type: "object"},
 	})
 	if err != nil {
-		return fmt.Errorf("native user confirmation is unavailable; no project state was changed: %w", err)
+		return "unavailable"
 	}
 	if result == nil || result.Action != "accept" {
-		return fmt.Errorf("user did not confirm the StateSeal action; no project state was changed")
+		return "declined"
 	}
-	return nil
+	return "accepted"
+}
+
+func confirmationReasonCode(outcome string) string {
+	if outcome == "declined" {
+		return "USER_DECLINED_CONFIRMATION"
+	}
+	return "CLIENT_CONFIRMATION_UNAVAILABLE"
+}
+
+func degradedProjectInspection(inspection mcpProjectInspection, outcome string) mcpProjectInspection {
+	inspection.AuthorityStatus = "degraded"
+	inspection.ReasonCode = confirmationReasonCode(outcome)
+	inspection.Retryable = outcome == "unavailable"
+	inspection.SafeState = &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: false}
+	inspection.AllowedActions = []string{"continue_unverified", "retry", "exclude_project"}
+	inspection.Unverified = true
+	inspection.NextAction = "continue with the Agent's normal development workflow, visibly label the result UNVERIFIED, and do not retry StateSeal automatically more than once"
+	return inspection
+}
+
+func degradedProjectInspectionForError(path, reasonCode string, err error) mcpProjectInspection {
+	return mcpProjectInspection{
+		Workspace: path, AuthorityStatus: "degraded", ReasonCode: reasonCode, Reason: err.Error(),
+		Retryable: true, Unverified: true,
+		SafeState:      &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: false},
+		AllowedActions: []string{"continue_unverified", "retry", "diagnose", "exclude_project"},
+		NextAction:     "StateSeal could not establish delivery authority; continue with the Agent's normal workflow and visibly label the result UNVERIFIED",
+	}
+}
+
+func degradedDesktopResult(repoPath string, err error) desktopCommandResult {
+	return desktopCommandResult{
+		Stage: "degraded", AuthorityStatus: "degraded", ReasonCode: "STATESEAL_AUTHORITY_UNAVAILABLE",
+		Reason: err.Error(), Retryable: true, Unverified: true,
+		SafeState:      &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: false},
+		AllowedActions: []string{"continue_unverified", "retry", "diagnose", "exclude_project"},
+		NextAction:     "StateSeal infrastructure is unavailable for " + repoPath + "; continue with the Agent's normal workflow and visibly label the result UNVERIFIED",
+	}
 }
 
 func mcpAnnotations(readOnly, destructive, idempotent, openWorld bool) *mcp.ToolAnnotations {
@@ -222,6 +341,45 @@ func mcpAnnotations(readOnly, destructive, idempotent, openWorld bool) *mcp.Tool
 }
 
 func boolPointer(value bool) *bool { return &value }
+
+func inspectMCPWorkspace(path, repository, agent string) (mcpProjectInspection, error) {
+	if strings.TrimSpace(path) == "" {
+		return mcpProjectInspection{}, fmt.Errorf("repo_path is required")
+	}
+	workspace, err := workspacepkg.Inspect(path)
+	if err != nil {
+		return mcpProjectInspection{}, err
+	}
+	if len(workspace.Repositories) == 0 {
+		return mcpProjectInspection{
+			Workspace: workspace.Root, Repositories: workspace.Repositories,
+			AuthorityStatus: "not_applicable", ReasonCode: "WORKSPACE_NO_GIT_REPOSITORIES",
+			Unverified: true, AllowedActions: []string{"continue_unverified"},
+			SafeState:  &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: false},
+			NextAction: "StateSeal requires a Git repository for state-bound delivery; continue with the Agent's normal workflow and disclose that the result is UNVERIFIED",
+		}, nil
+	}
+	if strings.TrimSpace(repository) == "" && len(workspace.Repositories) > 1 {
+		return mcpProjectInspection{
+			Workspace: workspace.Root, Repositories: workspace.Repositories,
+			AuthorityStatus: "needs_user_action", ReasonCode: "REPOSITORY_SELECTION_REQUIRED",
+			AllowedActions: []string{"select_repository", "exclude_project"},
+			SafeState:      &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: false},
+			NextAction:     "show the discovered repositories and ask the user which repository this development goal targets, then call inspect_project again with repository",
+		}, nil
+	}
+	root, err := workspacepkg.Resolve(path, repository)
+	if err != nil {
+		return mcpProjectInspection{}, err
+	}
+	inspection, err := inspectMCPProject(root, agent)
+	if err != nil {
+		return mcpProjectInspection{}, err
+	}
+	inspection.Workspace = workspace.Root
+	inspection.Repositories = workspace.Repositories
+	return inspection, nil
+}
 
 func inspectMCPProject(path, agent string) (mcpProjectInspection, error) {
 	root, err := resolveMCPRepo(path)
@@ -236,7 +394,10 @@ func inspectMCPProject(path, agent string) (mcpProjectInspection, error) {
 		return mcpProjectInspection{
 			Project: filepath.Base(root), RepoRoot: root, Excluded: true,
 			ExclusionReason: settings.IntegrationExclusionReason, ExcludedAt: settings.IntegrationExcludedAt,
-			NextAction: "automatic StateSeal routing is disabled for this project; do not call enable_project or start_delivery, and continue with the Agent's normal workflow",
+			AuthorityStatus: "not_applicable", ReasonCode: "PROJECT_EXCLUDED", Unverified: true,
+			SafeState:      &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: false},
+			AllowedActions: []string{"continue_unverified", "include_project"},
+			NextAction:     "automatic StateSeal routing is disabled for this project; do not call enable_project or start_delivery, and continue with the Agent's normal workflow",
 		}, nil
 	}
 	policyPath := filepath.Join(root, "seal.yaml")
@@ -253,17 +414,19 @@ func inspectMCPProject(path, agent string) (mcpProjectInspection, error) {
 		desktopAgentEnabled(settings, agent) &&
 		settings.DesktopPolicyDigest == policyDigest
 	inspection := mcpProjectInspection{
-		Project: filepath.Base(root), RepoRoot: root, Enabled: enabled,
+		Project: filepath.Base(root), RepoRoot: root, Agent: agentDisplayName(agent), Enabled: enabled,
 		ConfirmationRequired: !enabled, Admission: checkCommandList(policy.Admission.Checks),
 		Completion: checkCommandList(policy.Completion.Checks), Protected: append([]string(nil), policy.State.Protected...),
-		Execution:     "isolated Git worktree plus fresh independent evaluator",
+		Execution:     "isolated Git worktree plus same-agent worker and fresh independent evaluator",
 		ResidualRisks: append([]string(nil), policy.ResidualRisks...), PolicyDigest: policyDigest,
 		VerifierProvenance: mcpVerifierPlans(policy),
 	}
 	if enabled {
+		inspection.AuthorityStatus = "healthy"
 		inspection.NextAction = "call start_delivery with the user's ordinary development goal; do not edit the source workspace directly"
 		return inspection, nil
 	}
+	inspection.AuthorityStatus = "needs_enablement"
 	inspection.SetupToken = setupToken(root, policyDigest, agent)
 	inspection.NextAction = "present this concise verification contract, then request native approval for enable_project using the exact setup_token"
 	return inspection, nil
@@ -312,24 +475,64 @@ func enableMCPProject(path, token, agent string) (mcpProjectInspection, error) {
 
 	policyPath := filepath.Join(inspection.RepoRoot, "seal.yaml")
 	createdPolicy := !fileExists(policyPath)
+	changedPaths := make([]string, 0, 2)
 	if createdPolicy {
 		policy, _ := discoveredProjectPolicy(inspection.RepoRoot)
 		policy.Task.Goal = "Runtime goals are supplied by StateSeal MCP."
 		if err := config.Write(policyPath, policy); err != nil {
 			return mcpProjectInspection{}, err
 		}
-		if err := identity.EnsureLocalExclude(inspection.RepoRoot, ".stateseal/"); err != nil {
+		changedPaths = append(changedPaths, "seal.yaml")
+	}
+	if err := identity.EnsureLocalExclude(inspection.RepoRoot, ".stateseal/"); err != nil {
+		if createdPolicy {
 			_ = os.Remove(policyPath)
-			return mcpProjectInspection{}, err
 		}
-		if _, err := identity.Git(inspection.RepoRoot, "add", "--", "seal.yaml"); err != nil {
+		return mcpProjectInspection{}, err
+	}
+
+	adapterPath := agentAdapterPath(inspection.RepoRoot, agent)
+	adapterRaw, adapterReadErr := os.ReadFile(adapterPath)
+	adapterExisted := adapterReadErr == nil
+	if adapterReadErr != nil && !os.IsNotExist(adapterReadErr) {
+		if createdPolicy {
 			_ = os.Remove(policyPath)
-			return mcpProjectInspection{}, fmt.Errorf("stage StateSeal policy: %w", err)
+		}
+		return mcpProjectInspection{}, adapterReadErr
+	}
+	if !adapterConfigured(inspection.RepoRoot, agent) {
+		binary, binaryErr := sealExecutable()
+		if binaryErr != nil {
+			if createdPolicy {
+				_ = os.Remove(policyPath)
+			}
+			return mcpProjectInspection{}, binaryErr
+		}
+		if _, adapterErr := installAgentAdapter(inspection.RepoRoot, agent, binary, false); adapterErr != nil {
+			if createdPolicy {
+				_ = os.Remove(policyPath)
+			}
+			return mcpProjectInspection{}, adapterErr
+		}
+		changedPaths = append(changedPaths, relativeDisplay(inspection.RepoRoot, adapterPath))
+	}
+	if len(changedPaths) > 0 {
+		if _, err := identity.Git(inspection.RepoRoot, append([]string{"add", "--"}, changedPaths...)...); err != nil {
+			rollbackMCPEnablement(policyPath, createdPolicy, adapterPath, adapterExisted, adapterRaw)
+			return mcpProjectInspection{}, fmt.Errorf("stage StateSeal project integration: %w", err)
 		}
 		if _, err := identity.Git(inspection.RepoRoot, "commit", "-m", "chore(stateseal): configure verified desktop delivery"); err != nil {
-			_, _ = identity.Git(inspection.RepoRoot, "rm", "--cached", "--quiet", "--", "seal.yaml")
-			_ = os.Remove(policyPath)
-			return mcpProjectInspection{}, fmt.Errorf("commit StateSeal policy: %w", err)
+			rollbackMCPEnablement(policyPath, createdPolicy, adapterPath, adapterExisted, adapterRaw)
+			if createdPolicy {
+				_, _ = identity.Git(inspection.RepoRoot, "rm", "--cached", "--quiet", "--ignore-unmatch", "--", "seal.yaml")
+			}
+			adapterRelative := relativeDisplay(inspection.RepoRoot, adapterPath)
+			if adapterExisted {
+				_, _ = identity.Git(inspection.RepoRoot, "add", "--", adapterRelative)
+			} else {
+				_, _ = identity.Git(inspection.RepoRoot, "rm", "--cached", "--quiet", "--ignore-unmatch", "--", adapterRelative)
+			}
+			return mcpProjectInspection{}, fmt.Errorf("commit StateSeal project integration: %w", err)
 		}
 	}
 
@@ -356,6 +559,17 @@ func enableMCPProject(path, token, agent string) (mcpProjectInspection, error) {
 	return result, nil
 }
 
+func rollbackMCPEnablement(policyPath string, createdPolicy bool, adapterPath string, adapterExisted bool, adapterRaw []byte) {
+	if createdPolicy {
+		_ = os.Remove(policyPath)
+	}
+	if adapterExisted {
+		_ = os.WriteFile(adapterPath, adapterRaw, 0o644)
+	} else {
+		_ = os.Remove(adapterPath)
+	}
+}
+
 func startMCPDelivery(ctx context.Context, req *mcp.CallToolRequest, input mcpStartDeliveryInput, agent string) (desktopCommandResult, error) {
 	root, err := resolveMCPRepo(input.RepoPath)
 	if err != nil {
@@ -375,17 +589,41 @@ func startMCPDelivery(ctx context.Context, req *mcp.CallToolRequest, input mcpSt
 	if err := store.SaveDesktopSession(session); err != nil {
 		return desktopCommandResult{}, err
 	}
+	workspaceRoot := root
+	if workspace, workspaceErr := workspacepkg.Inspect(input.RepoPath); workspaceErr == nil {
+		workspaceRoot = workspace.Root
+	}
 	progress := newMCPProgressReporter(ctx, req)
 	locale := i18n.Detect()
 	progress(2, integrationText(locale,
-		"StateSeal accepted the goal and bound it to durable Desktop authority state",
-		"StateSeal 已接收目标，并绑定到持久化 Desktop 权威状态"))
+		fmt.Sprintf("StateSeal engaged · Workspace: %s · Repository: %s · Agent: %s · Mode: isolated verified delivery", workspaceRoot, root, agentDisplayName(agent)),
+		fmt.Sprintf("StateSeal 已介入 · Workspace：%s · Repository：%s · Agent：%s · Mode：隔离可信交付", workspaceRoot, root, agentDisplayName(agent))))
 	result, err := runDesktopSession(ctx, sessionID, func(event machineProgressEvent) {
 		progress(0, event.Message)
 	})
 	if err != nil {
 		return desktopCommandResult{}, err
 	}
+	if result.Stage == store.DesktopStageFailed && result.Verdict == "" {
+		result.Workspace = workspaceRoot
+		result.Repository = root
+		result.Agent = agentDisplayName(agent)
+		result.ExecutionMode = "isolated verified delivery"
+		result.AuthorityStatus = "degraded"
+		result.ReasonCode = "STATESEAL_DELIVERY_RUNTIME_FAILED"
+		result.Retryable = true
+		result.Unverified = true
+		result.SafeState = &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: false}
+		result.AllowedActions = []string{"continue_unverified", "retry", "diagnose", "exclude_project"}
+		result.NextAction = "StateSeal itself failed before producing a verification verdict; continue with the Agent's normal workflow and visibly label the result UNVERIFIED"
+		return result, nil
+	}
+	result.Workspace = workspaceRoot
+	result.Repository = root
+	result.Agent = agentDisplayName(agent)
+	result.ExecutionMode = "isolated verified delivery"
+	result.DeliveryStages = []string{"create isolated candidate", "agent development", "independent verification", "receipt", "user-confirmed apply"}
+	result.AuthorityStatus = "healthy"
 	progress(100, integrationText(locale,
 		"StateSeal finished independent verification and bound the result to the exact code state",
 		"StateSeal 已完成独立验证，并将结果绑定到确切代码状态"))
@@ -426,7 +664,8 @@ func desktopSessionResult(sessionID string) (desktopCommandResult, error) {
 	result := desktopCommandResult{
 		SessionID: session.SessionID, Stage: session.Stage, Verdict: protocolVerdict(session.Verdict),
 		TaskID: session.TaskID, ReceiptID: session.ReceiptID, Reason: session.LastError,
-		NextAction: desktopSessionNextAction(session),
+		AuthorityStatus: "healthy",
+		NextAction:      desktopSessionNextAction(session),
 	}
 	if state, stateErr := loadDesktopTaskState(session); stateErr == nil {
 		result.Files = verifiedChangedFileNames(state)
@@ -467,13 +706,9 @@ func resolveMCPRepo(path string) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "", fmt.Errorf("repo_path is required")
 	}
-	abs, err := filepath.Abs(path)
+	root, err := workspacepkg.Resolve(path, "")
 	if err != nil {
-		return "", err
-	}
-	root, err := identity.GitRoot(abs)
-	if err != nil {
-		return "", fmt.Errorf("open a Git project directory before using StateSeal: %w", err)
+		return "", fmt.Errorf("select a Git repository for StateSeal: %w", err)
 	}
 	return filepath.Clean(root), nil
 }
@@ -509,7 +744,7 @@ func validateMCPServer(binary, agent string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "stateseal-doctor", Version: buildinfo.Current().Version}, nil)
-	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: exec.Command(binary, "mcp", "serve", "--agent", agent)}, nil)
+	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: exec.Command(binary, "mcp", "serve", "--agent", agent, "--confirmation", "host-tool")}, nil)
 	if err != nil {
 		return fmt.Errorf("MCP initialize handshake: %w", err)
 	}

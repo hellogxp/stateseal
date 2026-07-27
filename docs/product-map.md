@@ -9,11 +9,10 @@ a test framework, and it does not ship a separate Desktop application.
 
 ```mermaid
 flowchart TD
-    A["Install StateSeal<br/>once per computer"] --> B["seal integrate &lt;agent&gt;<br/>once per Agent"]
-    B --> C["Open a Git project<br/>in the existing Agent"]
+    A["Install StateSeal Core + Plugin<br/>once per computer"] --> C["Open a workspace<br/>in the existing Agent"]
     C --> D["First project use<br/>review verification contract once"]
     D --> E["Describe the development goal"]
-    E --> F["StateSeal starts isolated delivery<br/>and blocks recursive routing"]
+    E --> F["StateSeal starts isolated delivery<br/>and prevents internal recursive routing"]
     F --> F2["Agent analyzes, edits, and self-tests<br/>meaningful progress remains visible"]
     F2 --> G["StateSeal captures a non-empty candidate boundary"]
     G --> H["Independent admission and completion checks"]
@@ -24,11 +23,17 @@ flowchart TD
 ```
 
 The portable authoritative path starts the controlled task with `seal run`.
-Codex Desktop uses MCP to route an ordinary code-changing prompt into that same
-path; read-only work remains outside the delivery state machine. Server-initiated
-native confirmation gates the one-time project contract and final apply. MCP
+The StateSeal Plugin packages the routing Skill and MCP registration; StateSeal
+Core remains the transaction Broker. Codex Desktop uses MCP to route an ordinary
+code-changing prompt into that same path; read-only work remains outside the
+delivery state machine. Single host-tool approvals gate the one-time project
+contract and final apply. MCP
 routing remains Agent-mediated, while all boundaries after `start_delivery` are
-enforced by StateSeal. No prompt prefix or hook-trust command is required. The
+enforced by StateSeal. Preventing recursive routing applies only to StateSeal's
+internal worker; it is not a user-development block. Infrastructure failures
+degrade visibly to native Agent development as `UNVERIFIED`, while a healthy
+enforce-policy rejection remains authoritative. No prompt prefix or hook-trust
+command is required. The
 surface remains experimental until the repaired path passes pinned live Desktop
 conformance. Other Desktop/IDE adapters currently provide the lifecycle
 foundation only.
@@ -43,6 +48,7 @@ flowchart LR
     end
 
     subgraph Thin_Adapters["Thin Agent adapters"]
+        PLUGIN["Plugin packaging and intent routing"]
         EVENTS["CLI lifecycle events"]
         MCP["Desktop MCP tools"]
         CAP["Capability and conformance checks"]
@@ -63,7 +69,7 @@ flowchart LR
     end
 
     CLI --> EVENTS
-    DESKTOP --> MCP
+    DESKTOP --> PLUGIN --> MCP
     MCP --> CAP
     EVENTS --> CAP --> SESSION
     SESSION --> PROPOSAL --> BROKER
@@ -100,6 +106,9 @@ verifier's layer, origin, evidence and status, plus declared uncovered risks.
 
 | Capability | Status |
 | --- | --- |
+| Codex Plugin package (Skill + MCP + marketplace) | Implemented; Plugin validator passes |
+| Non-Git workspace repository discovery and explicit selection | Implemented |
+| Structured fail-open on StateSeal infrastructure failure | Implemented; result is visibly `UNVERIFIED`, no receipt |
 | Goal-driven managed CLI | Implemented and live-validated with pinned Codex CLI |
 | Project verification discovery and one-time confirmation | Implemented |
 | Isolated proposal and fresh evaluator | Implemented |
@@ -108,7 +117,7 @@ verifier's layer, origin, evidence and status, plus declared uncovered risks.
 | Verification coverage, provenance and delivery-impact reporting | Implemented; product outcome baselines pending |
 | User-level Codex/Claude/Qoder integration management | Implemented; Desktop/IDE level remains experimental |
 | Qoder project adapter | Deterministic contract tests implemented; live validation pending |
-| Codex Desktop managed delivery | Recursive child and empty-candidate failure injections pass; native confirmation and exact-branch binding implemented; pinned live rerun pending |
+| Codex Desktop managed delivery | Recursive child and empty-candidate failure injections pass; single host approval, protected project hooks, structured degradation, and exact-branch binding implemented; pinned live rerun pending |
 | Claude Code, Qoder, Cursor live compatibility | Pending pinned-version validation |
 | StateSeal Desktop application | Explicitly out of scope |
 | Cloud dashboard and multi-Agent orchestration | Deferred |

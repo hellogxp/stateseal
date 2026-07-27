@@ -10,12 +10,12 @@ Agent、不是测试框架，也不开发独立 Desktop App。
 
 ```mermaid
 flowchart TD
-    A["安装 StateSeal<br/>每台电脑一次"] --> B["seal integrate &lt;agent&gt;<br/>每个 Agent 一次"]
-    B --> C["在现有 Agent 中<br/>打开 Git 项目"]
+    A["安装 StateSeal Core + Plugin<br/>每台电脑一次"] --> C["在现有 Agent 中<br/>打开 Workspace"]
     C --> D["项目首次使用<br/>确认验证合同一次"]
     D --> E["用户输入开发目标"]
-    E --> F["Agent 分析、编码和自测"]
-    F --> G["StateSeal 捕获候选边界"]
+    E --> F["StateSeal 创建隔离交付<br/>仅防止内部递归路由"]
+    F --> F2["Agent 分析、编码和自测"]
+    F2 --> G["StateSeal 捕获候选边界"]
     G --> H["独立 Admission 与 Completion 验证"]
     H -->|未通过| I["返回证据<br/>Agent 继续 Loop"]
     I --> F
@@ -23,11 +23,14 @@ flowchart TD
     J --> K["用户确认并应用已验证代码"]
 ```
 
-通用权威路径仍由 `seal run` 启动。Codex Desktop 通过 MCP 自动识别普通开发
-目标并委托给同一条权威路径；项目合同启用和最终应用由 Agent 原生工具授权
-控制，不需要提示词前缀或 Hook 信任命令。在固定 Desktop 版本完成实机
-conformance 前仍标记为 experimental。其他 Desktop/IDE adapter 当前只完成
-生命周期基础。
+通用权威路径仍由 `seal run` 启动。StateSeal Plugin 打包自动路由 Skill 与
+MCP 注册，StateSeal Core 是事务 Broker。Codex Desktop 通过 MCP 自动识别普通开发
+目标并委托给同一条权威路径；项目合同启用和最终应用各使用一次 Agent 原生工具授权
+控制，不需要提示词前缀或 Hook 信任命令。内部递归保护只作用于 StateSeal
+Worker，不会阻止用户继续开发；StateSeal 基础设施故障会可见降级为原生 Agent
+流程并标记 `UNVERIFIED`，健康 enforce 策略的真实拒绝仍然有效。在固定 Desktop
+版本完成实机 conformance 前仍标记为 experimental。其他 Desktop/IDE adapter
+当前只完成生命周期基础。
 
 ## 技术架构
 
@@ -39,6 +42,7 @@ flowchart LR
     end
 
     subgraph Adapter["薄适配层"]
+        PLUGIN["Plugin 打包与意图路由"]
         EVENT["CLI 生命周期 Hook"]
         MCP["Desktop MCP 工具"]
         CONF["能力声明与一致性检查"]
@@ -59,7 +63,7 @@ flowchart LR
     end
 
     CLI --> EVENT
-    DESKTOP --> MCP
+    DESKTOP --> PLUGIN --> MCP
     MCP --> CONF
     EVENT --> CONF --> SESSION
     SESSION --> PROPOSAL --> BROKER
@@ -83,6 +87,9 @@ Receipt 会记录每个 Verifier 的层级、来源、Evidence 和结果，同�
 
 | 能力 | 状态 |
 | --- | --- |
+| Codex Plugin（Skill + MCP + marketplace） | 已实现；Plugin 官方验证器通过 |
+| 非 Git Workspace 仓库发现和显式选择 | 已实现 |
+| StateSeal 自身故障结构化降级 | 已实现；结果标记 `UNVERIFIED`，不生成 Receipt |
 | 目标驱动的受控 CLI | 已实现；固定 Codex CLI 版本已通过实机验证 |
 | 项目识别与首次验证合同确认 | 已实现 |
 | 隔离候选区与 Fresh Evaluator | 已实现 |

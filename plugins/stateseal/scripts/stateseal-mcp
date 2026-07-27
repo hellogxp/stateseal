@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${STATESEAL_BIN:-}" ]; then
+  exec "$STATESEAL_BIN" mcp serve --agent codex --confirmation host-tool
+fi
+
+if command -v seal >/dev/null 2>&1; then
+  exec seal mcp serve --agent codex --confirmation host-tool
+fi
+
+printf '%s\n' "StateSeal Core is not installed. Install the StateSeal release or set STATESEAL_BIN to the absolute seal binary path." >&2
+exit 127

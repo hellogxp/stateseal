@@ -47,11 +47,17 @@ O instalador seleciona a plataforma e verifica o checksum SHA-256.
 curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
-cd your-project
-seal integrate codex-desktop
-seal run "Corrigir callbacks duplicados e preservar a compatibilidade"
-seal ui
+codex plugin marketplace add /path/to/stateseal
+codex plugin add stateseal@stateseal
 ```
+
+O Plugin inclui o Skill e o registro MCP e usa o StateSeal Core já instalado;
+não é necessário instalar o MCP separadamente. O primeiro comando apenas
+registra o checkout local no Codex: ele não publica nem envia código. Em uma
+nova tarefa do Codex, pedidos comuns de alteração ativam o StateSeal de forma
+automática e visível. O primeiro contrato do projeto e o Apply final exigem
+confirmação explícita. Sem o Plugin, use
+`seal run --repo /path/to/project "…"`.
 
 Para avaliação anônima ou checkout do código-fonte, execute `make install` com
 Git e Go 1.24 ou superior.

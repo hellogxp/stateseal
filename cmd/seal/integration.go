@@ -344,7 +344,8 @@ func integrationDoctorCmd() *cobra.Command {
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), "✓ MCP initialize handshake")
 				fmt.Fprintln(cmd.OutOrStdout(), "✓ inspect, enable, deliver, status, apply, and reject tools")
-				fmt.Fprintln(cmd.OutOrStdout(), "✓ native elicitation and tool approval for enable_project and apply_verified")
+				fmt.Fprintln(cmd.OutOrStdout(), "✓ single host-tool approval for enable_project and apply_verified")
+				fmt.Fprintln(cmd.OutOrStdout(), "✓ capability-aware elicitation fallback degrades without blocking ordinary development")
 				fmt.Fprintf(cmd.OutOrStdout(), "Support: %s\n", spec.SupportLevel)
 				return nil
 			}

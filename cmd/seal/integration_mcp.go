@@ -59,7 +59,7 @@ func validateMCPIntegration(spec integrationSpec, path string) error {
 		return fmt.Errorf("%s has no StateSeal-owned MCP block", path)
 	}
 	for _, required := range []string{
-		"[mcp_servers.stateseal]", `args = ["mcp", "serve", "--agent", "` + spec.Agent + `"]`,
+		"[mcp_servers.stateseal]", `args = ["mcp", "serve", "--agent", "` + spec.Agent + `", "--confirmation", "host-tool"]`,
 		`default_tools_approval_mode = "auto"`, "[mcp_servers.stateseal.tools.enable_project]",
 		"[mcp_servers.stateseal.tools.apply_verified]", `approval_mode = "prompt"`,
 	} {
@@ -111,7 +111,7 @@ func renderMCPIntegrationBlock(spec integrationSpec, binary string) string {
 	return fmt.Sprintf(`%s
 [mcp_servers.stateseal]
 command = %s
-args = ["mcp", "serve", "--agent", %s]
+args = ["mcp", "serve", "--agent", %s, "--confirmation", "host-tool"]
 enabled = true
 required = false
 startup_timeout_sec = 10
