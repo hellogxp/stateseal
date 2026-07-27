@@ -42,7 +42,9 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 ## Inicio rápido
 
 ```bash
-go install github.com/hellogxp/stateseal/cmd/seal@latest
+make install
+export PATH="$HOME/.local/bin:$PATH"
+seal version
 cd your-project
 seal integrate codex-desktop
 seal run "Corregir callbacks duplicados y mantener la compatibilidad"

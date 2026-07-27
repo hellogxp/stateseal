@@ -39,7 +39,9 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 ## 빠른 시작
 
 ```bash
-go install github.com/hellogxp/stateseal/cmd/seal@latest
+make install
+export PATH="$HOME/.local/bin:$PATH"
+seal version
 cd your-project
 seal integrate codex-desktop
 seal run "중복 콜백을 수정하고 호환성을 유지"

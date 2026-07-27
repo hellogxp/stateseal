@@ -20,6 +20,10 @@ jobs:
       - run: go test -race ./...
       - run: go vet ./...
       - run: go build -trimpath ./cmd/seal
+      - name: Validate README source installation
+        run: |
+          make install INSTALL_DIR="$RUNNER_TEMP/stateseal-bin"
+          "$RUNNER_TEMP/stateseal-bin/seal" version --json | grep -q '"version":"v0.1.0-alpha.dev.'
       - name: Validate localization coverage and synchronization
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}

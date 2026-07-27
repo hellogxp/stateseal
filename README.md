@@ -37,27 +37,13 @@ When a terminal candidate regresses after an earlier checkpoint was verified, St
 
 ## Quick start
 
-Requirements: Git. Release binaries do not require Go.
+The current pre-release installs from a source checkout and requires Git and
+Go 1.24 or newer:
 
-Install the latest verified release on macOS or Linux:
-
-```bash
-curl -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh -o install-stateseal.sh
-less install-stateseal.sh
-sh install-stateseal.sh
-rm install-stateseal.sh
-```
-
-The installer selects the current OS and architecture and verifies the archive
-against the release checksum before installing `seal` to `~/.local/bin`.
-Install a specific version with `--version v0.1.0-alpha.1`, or set
-`STATESEAL_INSTALL_DIR` to choose another destination.
-
-Until the first binary release is published, install from source with Go 1.24
-or newer:
-
-```bash
-go install github.com/hellogxp/stateseal/cmd/seal@latest
+```sh
+make install
+export PATH="$HOME/.local/bin:$PATH"
+seal version
 ```
 
 From a source checkout, experience verified-checkpoint recovery end to end:

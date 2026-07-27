@@ -40,7 +40,9 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 ## クイックスタート
 
 ```bash
-go install github.com/hellogxp/stateseal/cmd/seal@latest
+make install
+export PATH="$HOME/.local/bin:$PATH"
+seal version
 cd your-project
 seal integrate codex-desktop
 seal run "重複コールバックを修正し、互換性を維持する"
