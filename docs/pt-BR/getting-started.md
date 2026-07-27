@@ -5,7 +5,12 @@
 O fluxo normal é instalar o StateSeal uma vez, integrar cada Agent, confirmar o
 contrato de verificação do projeto e descrever o objetivo da tarefa.
 
+Instale a versão criada pelo GitHub Actions a partir de um Git tag determinado.
+O instalador seleciona a plataforma e verifica o checksum SHA-256 publicado.
+
 ```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
 seal version
 seal integrate codex-desktop
 seal integrate status
@@ -13,6 +18,9 @@ seal integrate status
 cd /path/to/project
 seal run "Adicionar validação de entrada, preservar compatibilidade e incluir testes"
 ```
+
+Em um artefato anônimo ou checkout do código-fonte, execute `make install` com
+Git e Go 1.24 ou superior.
 
 Na primeira execução, o StateSeal mostra os comandos de admission e completion
 detectados e os caminhos protegidos. Confirme apenas se eles forem uma barreira

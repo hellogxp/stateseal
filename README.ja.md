@@ -39,8 +39,11 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 
 ## クイックスタート
 
+GitHub Actions が確定した Git tag から構築したリリースをインストールします。
+インストーラーはプラットフォームを選択し、SHA-256 を検証します。
+
 ```bash
-make install
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
 cd your-project
@@ -48,6 +51,9 @@ seal integrate codex-desktop
 seal run "重複コールバックを修正し、互換性を維持する"
 seal ui
 ```
+
+匿名レビューまたはソースチェックアウトでは、Git と Go 1.24 以降を用意して
+`make install` を実行できます。
 
 Runs Console では、全リポジトリの実行、状態来歴 DAG、検証証拠、信頼済みイベント、
 チェックポイント復旧、完了レシートを確認できます。UI は読み取り専用で、

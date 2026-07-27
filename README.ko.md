@@ -38,8 +38,11 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 
 ## 빠른 시작
 
+GitHub Actions가 확정된 Git tag에서 빌드한 릴리스를 설치합니다. 설치 프로그램은
+현재 플랫폼을 선택하고 SHA-256 체크섬을 검증합니다.
+
 ```bash
-make install
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
 cd your-project
@@ -47,6 +50,9 @@ seal integrate codex-desktop
 seal run "중복 콜백을 수정하고 호환성을 유지"
 seal ui
 ```
+
+익명 검토 또는 소스 체크아웃에서는 Git과 Go 1.24 이상으로 `make install`을
+실행할 수 있습니다.
 
 Runs Console은 모든 저장소의 실행 목록, 상태 출처 DAG, 검증 증거, 신뢰할 수 있는
 이벤트 타임라인, 체크포인트 복구 및 완료 영수증을 제공합니다. UI는 읽기 전용이며

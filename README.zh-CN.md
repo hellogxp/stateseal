@@ -39,8 +39,11 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 
 ## 快速开始
 
+推荐安装由 GitHub Actions 从确定 Git tag 构建的发行版；安装器会选择当前平台、
+校验 SHA-256 后安装到 `~/.local/bin`：
+
 ```bash
-make install
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
 
@@ -48,6 +51,8 @@ cd your-project
 seal integrate codex-desktop
 seal run "修复重复回调，并保持现有接口兼容"
 ```
+
+匿名评审或源码检出可在仓库中执行 `make install`，要求 Git 与 Go 1.24 或更高版本。
 
 查看本机所有仓库的运行记录：
 

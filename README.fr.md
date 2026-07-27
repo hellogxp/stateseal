@@ -41,8 +41,11 @@ WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
 
 ## Démarrage rapide
 
+Installez la version construite par GitHub Actions à partir d’un Git tag
+déterminé. Le programme sélectionne la plateforme et vérifie le SHA-256.
+
 ```bash
-make install
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
 cd your-project
@@ -50,6 +53,9 @@ seal integrate codex-desktop
 seal run "Corriger les callbacks dupliqués et préserver la compatibilité"
 seal ui
 ```
+
+Pour une évaluation anonyme ou un checkout des sources, exécutez `make install`
+avec Git et Go 1.24 ou version ultérieure.
 
 Runs Console affiche les exécutions de tous les dépôts, le DAG de provenance,
 les preuves du vérificateur, la chronologie fiable, la récupération et les

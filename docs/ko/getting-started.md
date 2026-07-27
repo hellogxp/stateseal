@@ -5,7 +5,12 @@
 일반적인 StateSeal 흐름은 컴퓨터에 한 번 설치하고, Agent를 한 번 통합하고,
 프로젝트의 검증 계약을 확인한 뒤 작업 목표를 설명하는 것입니다.
 
+GitHub Actions가 확정된 Git tag에서 빌드한 릴리스를 설치합니다. 설치 프로그램은
+플랫폼을 선택하고 공개된 SHA-256 체크섬을 검증합니다.
+
 ```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
 seal version
 seal integrate codex-desktop
 seal integrate status
@@ -13,6 +18,9 @@ seal integrate status
 cd /path/to/project
 seal run "입력 검증을 추가하고 호환성을 유지하며 테스트 포함"
 ```
+
+익명 아티팩트 또는 소스 체크아웃에서는 Git과 Go 1.24 이상으로 `make install`을
+실행합니다.
 
 첫 실행에서 StateSeal은 감지된 admission, completion 명령과 보호 경로를 보여 줍니다.
 해당 명령이 최소 전달 게이트로 적절할 때만 확인하세요.

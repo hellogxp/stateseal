@@ -37,16 +37,26 @@ When a terminal candidate regresses after an earlier checkpoint was verified, St
 
 ## Quick start
 
-The current pre-release installs from a source checkout and requires Git and
-Go 1.24 or newer:
+Install the latest release binary built from a Git tag by GitHub Actions. The
+installer selects the current macOS/Linux architecture, verifies the published
+SHA-256 checksum, and installs to `~/.local/bin`:
 
 ```sh
-make install
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 seal version
 ```
 
-From a source checkout, experience verified-checkpoint recovery end to end:
+To inspect the installer first, replace `| sh` with `| less`. Anonymous artifact
+reviewers and source users can install the exact checkout with Git and Go 1.24
+or newer:
+
+```sh
+make install
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+From the source checkout, experience verified-checkpoint recovery end to end:
 
 ```bash
 make experience

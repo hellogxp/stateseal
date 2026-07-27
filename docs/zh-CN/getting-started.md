@@ -13,11 +13,18 @@ Agent 级  每个 Agent 集成一次
 
 ## 1. 安装与确认版本
 
-安装发行版后确认二进制身份：
+安装由 GitHub Actions 从确定 Git tag 构建的最新发行版。安装器会识别
+macOS/Linux 与 amd64/arm64，下载匹配的归档、校验发布的 SHA-256，并安装到
+`~/.local/bin`：
 
 ```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
 seal version
 ```
+
+如需先检查脚本，把 `| sh` 替换为 `| less`。匿名评审或源码检出可以执行
+`make install` 安装当前精确版本；源码安装要求 Git 与 Go 1.24 或更高版本。
 
 ## 2. 集成 Agent
 

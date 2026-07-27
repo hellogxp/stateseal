@@ -24,7 +24,7 @@ module=github.com/hellogxp/stateseal/internal/buildinfo
 ldflags="-s -w -X $module.Version=$version -X $module.Commit=$commit -X $module.Date=$build_date"
 
 mkdir -p "$dist"
-rm -f "$dist"/stateseal_*.tar.gz "$dist"/checksums.txt
+rm -f "$dist"/stateseal_*.tar.gz "$dist"/checksums.txt "$dist"/install.sh
 
 for target in $targets; do
 	goos=${target%/*}
@@ -51,5 +51,10 @@ done
 		shasum -a 256 stateseal_*.tar.gz > checksums.txt
 	fi
 )
+
+sed "s/STATESEAL_DEFAULT_VERSION:-latest/STATESEAL_DEFAULT_VERSION:-$version/" \
+	"$root/scripts/install.sh" >"$dist/install.sh"
+chmod 0755 "$dist/install.sh"
+sh -n "$dist/install.sh"
 
 printf 'Built StateSeal %s for %s\n' "$version" "$targets"

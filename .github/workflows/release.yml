@@ -8,15 +8,22 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
+      - run: go mod verify
       - run: go test -race ./...
       - run: go vet ./...
       - run: make sealbench
@@ -27,27 +34,74 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
+      - name: Resolve tagged source commit
+        run: |
+          release_commit="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          test -n "$release_commit"
+          test "$release_commit" = "$(git rev-parse HEAD)"
+          echo "RELEASE_COMMIT=$release_commit" >>"$GITHUB_ENV"
       - name: Build release artifacts
-        env:
-          VERSION: ${{ github.ref_name }}
-          COMMIT: ${{ github.sha }}
-        run: scripts/build-release.sh
+        run: VERSION="$GITHUB_REF_NAME" COMMIT="$RELEASE_COMMIT" sh scripts/build-release.sh
+      - name: Verify release artifacts
+        run: |
+          cd dist
+          sha256sum --check checksums.txt
+          for archive in stateseal_*.tar.gz; do
+            tar -tzf "$archive" | grep -Eq '/seal$'
+          done
+          tar -xzf "stateseal_${GITHUB_REF_NAME#v}_linux_amd64.tar.gz"
+          "./stateseal_${GITHUB_REF_NAME#v}_linux_amd64/seal" version --json >version.json
+          grep -Fq "\"version\":\"$GITHUB_REF_NAME\"" version.json
+          grep -Fq "\"commit\":\"$RELEASE_COMMIT\"" version.json
+          sh -n install.sh
+          cd ..
+          EXPECTED_VERSION="$GITHUB_REF_NAME" EXPECTED_COMMIT="$RELEASE_COMMIT" \
+            sh scripts/test-install.sh
+      - name: Attest public release artifacts
+        if: ${{ github.event.repository.visibility == 'public' }}
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: |
+            dist/stateseal_*.tar.gz
+            dist/checksums.txt
+            dist/install.sh
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          release_flags=--latest
+          case "$GITHUB_REF_NAME" in
+            *-*) release_flags=--prerelease ;;
+          esac
           gh release create "$GITHUB_REF_NAME" \
             dist/stateseal_*.tar.gz \
             dist/checksums.txt \
-            scripts/install.sh \
+            dist/install.sh \
             --verify-tag \
             --generate-notes \
-            --title "StateSeal $GITHUB_REF_NAME"
+            --title "StateSeal $GITHUB_REF_NAME" \
+            "$release_flags"
+      - name: Verify installation from published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATESEAL_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/stateseal-release" "$RUNNER_TEMP/stateseal-installed"
+          gh release download "$GITHUB_REF_NAME" \
+            --pattern install.sh \
+            --dir "$RUNNER_TEMP/stateseal-release"
+          STATESEAL_INSTALL_DIR="$RUNNER_TEMP/stateseal-installed" \
+            sh "$RUNNER_TEMP/stateseal-release/install.sh"
+          "$RUNNER_TEMP/stateseal-installed/seal" version --json >"$RUNNER_TEMP/installed-version.json"
+          grep -Fq "\"version\":\"$GITHUB_REF_NAME\"" "$RUNNER_TEMP/installed-version.json"
+          grep -Fq "\"commit\":\"$RELEASE_COMMIT\"" "$RUNNER_TEMP/installed-version.json"

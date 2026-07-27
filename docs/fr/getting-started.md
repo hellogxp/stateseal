@@ -5,7 +5,12 @@
 Le parcours normal consiste à installer StateSeal une fois, intégrer chaque
 Agent, confirmer le contrat de vérification du projet et décrire l’objectif.
 
+Installez la version construite par GitHub Actions à partir d’un Git tag
+déterminé. Le programme sélectionne la plateforme et vérifie le SHA-256 publié.
+
 ```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
 seal version
 seal integrate codex-desktop
 seal integrate status
@@ -13,6 +18,9 @@ seal integrate status
 cd /path/to/project
 seal run "Ajouter la validation des entrées, préserver la compatibilité et inclure des tests"
 ```
+
+Depuis un artefact anonyme ou un checkout des sources, exécutez `make install`
+avec Git et Go 1.24 ou version ultérieure.
 
 Lors de la première exécution, StateSeal présente les commandes d’admission et
 de completion détectées ainsi que les chemins protégés. Confirmez-les uniquement

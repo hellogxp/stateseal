@@ -7,11 +7,19 @@ StateSeal の通常フローは、コンピューターへのインストール�
 
 ## インストールと統合
 
+GitHub Actions が確定した Git tag から構築したリリースをインストールします。
+インストーラーはプラットフォームを選択し、公開 SHA-256 を検証します。
+
 ```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
 seal version
 seal integrate codex-desktop
 seal integrate status
 ```
+
+匿名アーティファクトまたはソースチェックアウトでは、Git と Go 1.24 以降を
+用意して `make install` を実行します。
 
 プロジェクトのルートで最初のタスクを開始します。
 

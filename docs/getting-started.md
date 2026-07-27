@@ -12,11 +12,19 @@ task       describe the development goal
 
 ## 1. Install StateSeal
 
-Install a release binary and confirm its build identity:
+Install the latest GitHub Actions-built release. The installer detects
+macOS/Linux and amd64/arm64, downloads the matching tagged archive, verifies its
+published SHA-256 checksum, and installs it to `~/.local/bin`:
 
 ```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
 seal version
 ```
+
+To inspect the installer before running it, replace `| sh` with `| less`.
+From an anonymous artifact or source checkout, install that exact revision with
+`make install`; source installation requires Git and Go 1.24 or newer.
 
 ## 2. Integrate an Agent
 
