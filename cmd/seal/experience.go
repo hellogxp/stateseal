@@ -215,6 +215,9 @@ func ensureDesktopMCPSetup(root, agent string) error {
 	if err != nil {
 		return fmt.Errorf("StateSeal Desktop project is not enabled: %w", err)
 	}
+	if settings.IntegrationExcluded {
+		return fmt.Errorf("project is excluded from automatic StateSeal integration: %s; run `seal integrate include %s` to allow fresh enablement", settings.IntegrationExclusionReason, root)
+	}
 	if !settings.DesktopEnabled || settings.DesktopSurface != "mcp" {
 		return fmt.Errorf("StateSeal Desktop project is not enabled; approve enable_project first")
 	}

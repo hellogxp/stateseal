@@ -6,8 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hellogxp/stateseal/internal/i18n"
+	"github.com/hellogxp/stateseal/internal/identity"
+	"github.com/hellogxp/stateseal/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -142,8 +145,134 @@ func integrateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&binary, "binary", "", "absolute StateSeal binary path embedded in the integration")
 	cmd.Flags().StringVar(&configPath, "config", "", "override the Agent user configuration path")
 	cmd.Flags().BoolVar(&force, "force", false, "replace StateSeal-owned integration entries")
-	cmd.AddCommand(integrationListCmd(), integrationStatusCmd(), integrationDoctorCmd(), integrationUninstallCmd())
+	cmd.AddCommand(
+		integrationListCmd(),
+		integrationStatusCmd(),
+		integrationDoctorCmd(),
+		integrationUninstallCmd(),
+		integrationExcludeCmd(),
+		integrationIncludeCmd(),
+		integrationExclusionsCmd(),
+	)
 	return cmd
+}
+
+func integrationExcludeCmd() *cobra.Command {
+	var reason string
+	cmd := &cobra.Command{
+		Use:     "exclude [repository]",
+		Aliases: []string{"ignore"},
+		Short:   "Exclude a Git project from automatic StateSeal integration",
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := integrationProjectRoot(args)
+			if err != nil {
+				return codedError{10, err}
+			}
+			reason = strings.TrimSpace(reason)
+			if reason == "" {
+				reason = "excluded by user"
+			}
+			settings, err := store.LoadProjectSettings(root)
+			if err != nil && !os.IsNotExist(err) {
+				return codedError{10, err}
+			}
+			settings.IntegrationExcluded = true
+			settings.IntegrationExclusionReason = reason
+			settings.IntegrationExcludedAt = time.Now().UTC().Format(time.RFC3339)
+			// Restoring automatic integration later must require a fresh,
+			// explicit project approval rather than reviving stale authority.
+			settings.TrustedHookAutomation = false
+			settings.DesktopEnabled = false
+			settings.DesktopPolicyDigest = ""
+			settings.DesktopSurface = ""
+			settings.DesktopAgents = nil
+			if err := store.SaveProjectSettings(root, settings); err != nil {
+				return codedError{11, err}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Excluded %s from automatic StateSeal integration.\n", root)
+			fmt.Fprintf(cmd.OutOrStdout(), "Reason: %s\n", reason)
+			fmt.Fprintln(cmd.OutOrStdout(), "Explicit `seal run` commands remain available. Restore automatic integration with `seal integrate include`.")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&reason, "reason", "", "record why this project is excluded")
+	return cmd
+}
+
+func integrationIncludeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "include [repository]",
+		Aliases: []string{"unexclude"},
+		Short:   "Allow a Git project to request automatic StateSeal integration",
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := integrationProjectRoot(args)
+			if err != nil {
+				return codedError{10, err}
+			}
+			settings, err := store.LoadProjectSettings(root)
+			if os.IsNotExist(err) {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s is not excluded.\n", root)
+				return nil
+			}
+			if err != nil {
+				return codedError{10, err}
+			}
+			if !settings.IntegrationExcluded {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s is not excluded.\n", root)
+				return nil
+			}
+			settings.IntegrationExcluded = false
+			settings.IntegrationExclusionReason = ""
+			settings.IntegrationExcludedAt = ""
+			if err := store.SaveProjectSettings(root, settings); err != nil {
+				return codedError{11, err}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Included %s for automatic StateSeal integration.\n", root)
+			fmt.Fprintln(cmd.OutOrStdout(), "The next code-changing Desktop task will require fresh project approval.")
+			return nil
+		},
+	}
+}
+
+func integrationExclusionsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "exclusions",
+		Short: "List projects excluded from automatic StateSeal integration",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			projects, err := store.ListExcludedProjects()
+			if err != nil {
+				return codedError{10, err}
+			}
+			if len(projects) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No projects are excluded.")
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "PROJECT\tEXCLUDED AT\tREASON")
+			for _, project := range projects {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", project.RepoRoot, project.IntegrationExcludedAt, project.IntegrationExclusionReason)
+			}
+			return nil
+		},
+	}
+}
+
+func integrationProjectRoot(args []string) (string, error) {
+	path := "."
+	if len(args) == 1 {
+		path = args[0]
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	root, err := identity.GitRoot(abs)
+	if err != nil {
+		return "", fmt.Errorf("resolve Git project %q: %w", path, err)
+	}
+	return filepath.Clean(root), nil
 }
 
 func integrationListCmd() *cobra.Command {

@@ -37,6 +37,8 @@ func TestProjectSettingsRoundTrip(t *testing.T) {
 	want := ProjectSettings{
 		Agent: "codex", TrustedHookAutomation: true, DesktopEnabled: true,
 		DesktopPolicyDigest: "policy-digest", DesktopSurface: "mcp", DesktopAgents: []string{"codex", "qoder"},
+		IntegrationExcluded: true, IntegrationExclusionReason: "self-development",
+		IntegrationExcludedAt: "2026-07-27T12:00:00Z",
 	}
 	if err := SaveProjectSettings("/repo/project", want); err != nil {
 		t.Fatal(err)
@@ -45,8 +47,35 @@ func TestProjectSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	want.RepoRoot = filepath.Clean("/repo/project")
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("project settings mismatch: got %+v want %+v", got, want)
+	}
+}
+
+func TestListExcludedProjects(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	for _, item := range []struct {
+		root     string
+		excluded bool
+		reason   string
+	}{
+		{"/repo/zeta", true, "generated fixture"},
+		{"/repo/alpha", true, "StateSeal development"},
+		{"/repo/included", false, ""},
+	} {
+		if err := SaveProjectSettings(item.root, ProjectSettings{
+			IntegrationExcluded: item.excluded, IntegrationExclusionReason: item.reason,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := ListExcludedProjects()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].RepoRoot != "/repo/alpha" || got[1].RepoRoot != "/repo/zeta" {
+		t.Fatalf("unexpected excluded projects: %+v", got)
 	}
 }
 

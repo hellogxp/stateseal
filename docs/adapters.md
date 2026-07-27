@@ -70,6 +70,26 @@ StateSeal owns the hard boundaries: isolated execution, non-empty delivery,
 external verification, exact receipt matching, native acceptance, and apply.
 Use `seal run` when the invocation itself must be an authoritative boundary.
 
+## Exclude a project from automatic integration
+
+Projects such as StateSeal itself can opt out of automatic MCP routing without
+disabling the user-level Agent integration:
+
+```bash
+cd /path/to/project
+seal integrate exclude --reason "StateSeal self-development"
+seal integrate exclusions
+
+# Allow automatic routing again; fresh project approval is still required.
+seal integrate include
+```
+
+The exclusion applies to the exact Git root and is stored in the user's
+StateSeal state directory, outside the repository. Project code cannot silently
+remove it. Excluding a project clears prior Desktop authorization and trusted
+hook automation. It does not block an explicit `seal run` command, and it is
+not inherited by CI or other computers.
+
 Use `seal adapter list` to inspect the built-in matrix and install only the
 agents used by the repository:
 

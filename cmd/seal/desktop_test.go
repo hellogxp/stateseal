@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -13,6 +14,77 @@ import (
 	"github.com/hellogxp/stateseal/internal/store"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func TestProjectExclusionDisablesAutomaticMCPUntilExplicitInclude(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := t.TempDir()
+	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	root, err := identity.GitRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/excluded\n\ngo 1.24\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRoot()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"integrate", "exclude", root, "--reason", "StateSeal self-development"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Explicit `seal run` commands remain available") {
+		t.Fatalf("exclude output did not explain its boundary: %s", out.String())
+	}
+	settings, err := store.LoadProjectSettings(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !settings.IntegrationExcluded || settings.IntegrationExclusionReason != "StateSeal self-development" ||
+		settings.IntegrationExcludedAt == "" || settings.DesktopEnabled || settings.TrustedHookAutomation {
+		t.Fatalf("project exclusion was incomplete: %+v", settings)
+	}
+	inspection, err := inspectMCPProject(root, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !inspection.Excluded || inspection.Enabled || inspection.ConfirmationRequired ||
+		inspection.SetupToken != "" || !strings.Contains(inspection.NextAction, "do not call enable_project") {
+		t.Fatalf("MCP inspection ignored project exclusion: %+v", inspection)
+	}
+	if _, err := enableMCPProject(root, "", "codex"); err == nil || !strings.Contains(err.Error(), "project is excluded") {
+		t.Fatalf("excluded project could be enabled without include: %v", err)
+	}
+
+	list := newRoot()
+	out.Reset()
+	list.SetOut(&out)
+	list.SetArgs([]string{"integrate", "exclusions"})
+	if err := list.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), root) || !strings.Contains(out.String(), "StateSeal self-development") {
+		t.Fatalf("excluded project was not listed: %s", out.String())
+	}
+
+	include := newRoot()
+	out.Reset()
+	include.SetOut(&out)
+	include.SetArgs([]string{"integrate", "include", root})
+	if err := include.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	included, err := inspectMCPProject(root, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if included.Excluded || included.Enabled || !included.ConfirmationRequired || included.SetupToken == "" {
+		t.Fatalf("include did not restore fresh approval flow: %+v", included)
+	}
+}
 
 func TestCodexDesktopIntegrationInstallsMCPWithoutReplacingUserConfig(t *testing.T) {
 	dir := t.TempDir()

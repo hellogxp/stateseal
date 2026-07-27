@@ -22,7 +22,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const stateSealMCPInstructions = "StateSeal is the verified-delivery authority for code-changing work in local Git projects. Use it for implementation, fixes, refactors, migrations, generated code, and tests; do not invoke it for explanation, search, planning, or other read-only work. For a code-changing request, call inspect_project before editing. If the project is enabled, call start_delivery and never edit the source workspace directly. If it is not enabled, present the concise verification contract and call enable_project; StateSeal itself elicits the user's native confirmation. After delivery, present changed files, checks, durations, exact code state, coverage, receipt, and residual risks. Then call apply_verified; StateSeal itself elicits a separate final acceptance. Never claim StateSeal verification without an admitted non-empty receipt, and never bypass a failed or rejected StateSeal delivery by editing the source workspace."
+const stateSealMCPInstructions = "StateSeal is the verified-delivery authority for code-changing work in local Git projects. Use it for implementation, fixes, refactors, migrations, generated code, and tests; do not invoke it for explanation, search, planning, or other read-only work. For a code-changing request, call inspect_project before editing. If the project is excluded, do not call enable_project or start_delivery; automatic StateSeal routing does not apply, so continue using the Agent's normal workflow. If the project is enabled, call start_delivery and never edit the source workspace directly. If it is not enabled, present the concise verification contract and call enable_project; StateSeal itself elicits the user's native confirmation. After delivery, present changed files, checks, durations, exact code state, coverage, receipt, and residual risks. Then call apply_verified; StateSeal itself elicits a separate final acceptance. Never claim StateSeal verification without an admitted non-empty receipt, and never bypass a failed or rejected StateSeal delivery by editing the source workspace."
 
 type mcpProjectInput struct {
 	RepoPath string `json:"repo_path" jsonschema:"absolute path to the Git project currently open in the Agent desktop"`
@@ -51,6 +51,9 @@ type mcpProjectInspection struct {
 	Project              string            `json:"project"`
 	RepoRoot             string            `json:"repo_root"`
 	Enabled              bool              `json:"enabled"`
+	Excluded             bool              `json:"excluded"`
+	ExclusionReason      string            `json:"exclusion_reason,omitempty"`
+	ExcludedAt           string            `json:"excluded_at,omitempty"`
 	ConfirmationRequired bool              `json:"confirmation_required"`
 	Admission            []string          `json:"admission"`
 	Completion           []string          `json:"completion"`
@@ -117,6 +120,9 @@ func newStateSealMCPServer(agent string) *mcp.Server {
 		inspection, err := inspectMCPProject(input.RepoPath, agent)
 		if err != nil {
 			return nil, mcpProjectInspection{}, err
+		}
+		if inspection.Excluded {
+			return nil, mcpProjectInspection{}, fmt.Errorf("project is excluded from automatic StateSeal integration: %s; run `seal integrate include %s` to allow fresh enablement", inspection.ExclusionReason, inspection.RepoRoot)
 		}
 		if !inspection.Enabled {
 			locale := i18n.Detect()
@@ -222,6 +228,17 @@ func inspectMCPProject(path, agent string) (mcpProjectInspection, error) {
 	if err != nil {
 		return mcpProjectInspection{}, err
 	}
+	settings, settingsErr := store.LoadProjectSettings(root)
+	if settingsErr != nil && !os.IsNotExist(settingsErr) {
+		return mcpProjectInspection{}, settingsErr
+	}
+	if settings.IntegrationExcluded {
+		return mcpProjectInspection{
+			Project: filepath.Base(root), RepoRoot: root, Excluded: true,
+			ExclusionReason: settings.IntegrationExclusionReason, ExcludedAt: settings.IntegrationExcludedAt,
+			NextAction: "automatic StateSeal routing is disabled for this project; do not call enable_project or start_delivery, and continue with the Agent's normal workflow",
+		}, nil
+	}
 	policyPath := filepath.Join(root, "seal.yaml")
 	missing := !fileExists(policyPath)
 	policy, err := projectPolicyPreview(root, missing)
@@ -232,7 +249,6 @@ func inspectMCPProject(path, agent string) (mcpProjectInspection, error) {
 	if err != nil {
 		return mcpProjectInspection{}, err
 	}
-	settings, settingsErr := store.LoadProjectSettings(root)
 	enabled := settingsErr == nil && settings.DesktopEnabled && settings.DesktopSurface == "mcp" &&
 		desktopAgentEnabled(settings, agent) &&
 		settings.DesktopPolicyDigest == policyDigest
@@ -276,6 +292,9 @@ func enableMCPProject(path, token, agent string) (mcpProjectInspection, error) {
 	if inspection.Enabled {
 		inspection.NextAction = "project was already enabled; call start_delivery for the user's goal"
 		return inspection, nil
+	}
+	if inspection.Excluded {
+		return mcpProjectInspection{}, fmt.Errorf("project is excluded from automatic StateSeal integration: %s; run `seal integrate include %s` to allow fresh enablement", inspection.ExclusionReason, inspection.RepoRoot)
 	}
 	if token == "" || token != inspection.SetupToken {
 		return mcpProjectInspection{}, fmt.Errorf("verification contract changed or was not inspected; call inspect_project again")

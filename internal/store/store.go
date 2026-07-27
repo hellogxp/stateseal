@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"time"
 
 	"github.com/hellogxp/stateseal/internal/identity"
@@ -29,12 +30,16 @@ type StoredTask struct {
 // ProjectSettings are local user preferences. They live outside the repository
 // so a coding Agent cannot silently change which integration StateSeal trusts.
 type ProjectSettings struct {
-	Agent                 string   `json:"agent,omitempty"`
-	TrustedHookAutomation bool     `json:"trusted_hook_automation,omitempty"`
-	DesktopEnabled        bool     `json:"desktop_enabled,omitempty"`
-	DesktopPolicyDigest   string   `json:"desktop_policy_digest,omitempty"`
-	DesktopSurface        string   `json:"desktop_surface,omitempty"`
-	DesktopAgents         []string `json:"desktop_agents,omitempty"`
+	RepoRoot                   string   `json:"repo_root,omitempty"`
+	Agent                      string   `json:"agent,omitempty"`
+	TrustedHookAutomation      bool     `json:"trusted_hook_automation,omitempty"`
+	DesktopEnabled             bool     `json:"desktop_enabled,omitempty"`
+	DesktopPolicyDigest        string   `json:"desktop_policy_digest,omitempty"`
+	DesktopSurface             string   `json:"desktop_surface,omitempty"`
+	DesktopAgents              []string `json:"desktop_agents,omitempty"`
+	IntegrationExcluded        bool     `json:"integration_excluded,omitempty"`
+	IntegrationExclusionReason string   `json:"integration_exclusion_reason,omitempty"`
+	IntegrationExcludedAt      string   `json:"integration_excluded_at,omitempty"`
 }
 
 func Open(repoRoot, taskID string) (*Store, error) {
@@ -112,6 +117,7 @@ func SaveProjectSettings(repoRoot string, settings ProjectSettings) error {
 	if err != nil {
 		return err
 	}
+	settings.RepoRoot = filepath.Clean(repoRoot)
 	raw, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
@@ -121,6 +127,47 @@ func SaveProjectSettings(repoRoot string, settings ProjectSettings) error {
 		return err
 	}
 	return os.Rename(tmp, filepath.Join(dir, "project-settings.json"))
+}
+
+// ListExcludedProjects returns exact Git roots that the user explicitly opted
+// out of automatic StateSeal integration. Entries are stored outside each
+// repository so project code cannot silently remove the exclusion.
+func ListExcludedProjects() ([]ProjectSettings, error) {
+	base, err := stateHome()
+	if err != nil {
+		return nil, err
+	}
+	root := filepath.Join(base, "stateseal")
+	repositories, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var result []ProjectSettings
+	for _, repository := range repositories {
+		if !repository.IsDir() || repository.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(root, repository.Name(), "project-settings.json"))
+		if err != nil {
+			continue
+		}
+		var settings ProjectSettings
+		if json.Unmarshal(raw, &settings) != nil || !settings.IntegrationExcluded || settings.RepoRoot == "" {
+			continue
+		}
+		expected := identity.Digest([]byte(settings.RepoRoot))[:20]
+		if repository.Name() != expected {
+			continue
+		}
+		result = append(result, settings)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].RepoRoot < result[j].RepoRoot
+	})
+	return result, nil
 }
 
 func LoadProjectSettings(repoRoot string) (ProjectSettings, error) {
