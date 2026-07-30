@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestBundledCodexPluginCarriesSkillAndMCPRegistration(t *testing.T) {
+func TestBundledCodexPluginIsObservationOnly(t *testing.T) {
 	working, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -22,42 +22,25 @@ func TestBundledCodexPluginCarriesSkillAndMCPRegistration(t *testing.T) {
 		Skills     string `json:"skills"`
 	}
 	readPluginJSON(t, filepath.Join(plugin, ".codex-plugin", "plugin.json"), &manifest)
-	if manifest.Name != "stateseal" || manifest.MCPServers != "./.mcp.json" || manifest.Skills != "./skills/" {
+	if manifest.Name != "stateseal" || manifest.MCPServers != "" || manifest.Skills != "./skills/" {
 		t.Fatalf("unexpected StateSeal Plugin manifest: %+v", manifest)
 	}
 
-	var mcpConfig struct {
-		Servers map[string]struct {
-			Command string `json:"command"`
-		} `json:"mcpServers"`
-	}
-	readPluginJSON(t, filepath.Join(plugin, ".mcp.json"), &mcpConfig)
-	server, ok := mcpConfig.Servers["stateseal"]
-	if !ok || server.Command != "./scripts/stateseal-mcp" {
-		t.Fatalf("StateSeal Plugin does not register its MCP launcher: %+v", mcpConfig)
-	}
-
-	launcher := filepath.Join(plugin, "scripts", "stateseal-mcp")
-	info, err := os.Stat(launcher)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode()&0o111 == 0 {
-		t.Fatalf("StateSeal MCP launcher is not executable: %s", launcher)
-	}
-	raw, err := os.ReadFile(launcher)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(raw), "--confirmation host-tool") {
-		t.Fatalf("Plugin MCP launcher does not use the single host approval boundary: %s", raw)
+	for _, removed := range []string{".mcp.json", filepath.Join("scripts", "stateseal-mcp")} {
+		if _, err := os.Stat(filepath.Join(plugin, removed)); !os.IsNotExist(err) {
+			t.Fatalf("observation-only Plugin still carries %s", removed)
+		}
 	}
 
 	skill, err := os.ReadFile(filepath.Join(plugin, "skills", "stateseal", "SKILL.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"StateSeal 已介入", "UNVERIFIED", "/seal status", "must not be confused"} {
+	for _, expected := range []string{
+		"Never route a coding request through StateSeal",
+		"Never start, stop, retry, continue, deny, block, approve, apply, restore",
+		"Observed", "Derived", "Inferred",
+	} {
 		if !strings.Contains(string(skill), expected) {
 			t.Fatalf("StateSeal Plugin Skill is missing %q", expected)
 		}

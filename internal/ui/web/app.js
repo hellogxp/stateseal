@@ -52,9 +52,9 @@ async function initLocale() {
 
 const statusColor = (status) => {
   const value = String(status || "").toUpperCase();
-  if (["ADMITTED", "APPLIED", "PASSED", "VERIFIED"].includes(value)) return "var(--green)";
-  if (["REJECTED", "FAILED", "ESCALATED"].includes(value)) return "var(--red)";
-  if (["ABSTAINED", "STALE", "WARNING"].includes(value)) return "var(--amber)";
+  if (["COMPLETED", "PASSED", "OBSERVED"].includes(value)) return "var(--green)";
+  if (["FAILED"].includes(value)) return "var(--red)";
+  if (["ATTENTION", "WARNING", "INFERRED"].includes(value)) return "var(--amber)";
   return "var(--blue)";
 };
 
@@ -123,9 +123,9 @@ function showError(error) {
 }
 
 function summaryMetrics(runs) {
-  const admitted = runs.filter(run => ["ADMITTED", "APPLIED"].includes(run.status)).length;
-  const active = runs.filter(run => ["WORKING", "VERIFYING", "VERIFIED"].includes(run.status)).length;
-  const blocked = runs.filter(run => ["REJECTED", "ABSTAINED", "STALE", "ESCALATED"].includes(run.status)).length;
+  const admitted = runs.filter(run => run.status === "COMPLETED").length;
+  const active = runs.filter(run => run.status === "ACTIVE").length;
+  const blocked = runs.filter(run => run.status === "ATTENTION").length;
   return { admitted, active, blocked };
 }
 
@@ -183,9 +183,9 @@ function filterRuns() {
   return state.runs.filter(run => {
     const haystack = `${run.goal} ${run.task_id} ${run.repository} ${run.status} ${run.rule_id}`.toLowerCase();
     if (query && !haystack.includes(query)) return false;
-    if (state.filter === "active") return ["WORKING", "VERIFYING", "VERIFIED"].includes(run.status);
-    if (state.filter === "admitted") return ["ADMITTED", "APPLIED"].includes(run.status);
-    if (state.filter === "notAdmitted") return ["REJECTED", "ABSTAINED", "STALE", "ESCALATED"].includes(run.status);
+    if (state.filter === "active") return run.status === "ACTIVE";
+    if (state.filter === "admitted") return run.status === "COMPLETED";
+    if (state.filter === "notAdmitted") return run.status === "ATTENTION";
     return true;
   });
 }
@@ -199,8 +199,8 @@ function renderRunRows() {
     return;
   }
   target.innerHTML = runs.map((run, index) => {
-    const complete = ["ADMITTED", "APPLIED", "REJECTED", "ABSTAINED", "STALE", "ESCALATED"].includes(run.status);
-    const phase = run.applied ? 4 : complete ? 3 : run.checkpoints_verified ? 2 : run.candidates_evaluated ? 1 : 0;
+    const complete = ["COMPLETED", "ATTENTION"].includes(run.status);
+    const phase = complete ? 4 : run.checkpoints_verified ? 2 : run.candidates_evaluated ? 1 : 0;
     const color = statusColor(run.status);
     return `
       <article class="run-row" data-run="${esc(run.id)}" tabindex="0" style="--status-color:${color};animation-delay:${Math.min(index * 35, 280)}ms">
@@ -211,7 +211,7 @@ function renderRunRows() {
           ${run.integrity_error ? `<div class="integrity-note">${esc(t("integrity.warning"))}</div>` : ""}
         </div>
         <div class="run-status">
-          <span class="status-pill ${["WORKING","VERIFYING","VERIFIED"].includes(run.status) ? "running" : ""}"><i></i>${esc(run.status)}</span>
+          <span class="status-pill ${run.status === "ACTIVE" ? "running" : ""}"><i></i>${esc(run.status)}</span>
           <div class="progress-rail" title="${esc(t("runs.progress"))}">
             ${[0,1,2,3,4].map((step, i) => `${i ? "<span></span>" : ""}<i class="${step <= phase ? "done" : ""}"></i>`).join("")}
           </div>
@@ -247,7 +247,7 @@ async function renderDetail(id) {
           <div class="subline"><span>${esc(run.repository)}</span><span>${esc(run.repository_root)}</span><span>${esc(t("detail.updated", {time: formatTime(run.updated_at)}))}</span></div>
         </div>
         <div class="detail-badge" style="--status-color:${color}">
-          <span class="status-pill ${["WORKING","VERIFYING","VERIFIED"].includes(run.status) ? "running" : ""}"><i></i>${esc(run.status)}</span>
+          <span class="status-pill ${run.status === "ACTIVE" ? "running" : ""}"><i></i>${esc(run.status)}</span>
         </div>
       </section>
       <section class="overview-grid">
@@ -297,15 +297,15 @@ function overviewCard(label, value, helper) {
 }
 
 function isTerminal(status) {
-  return ["ADMITTED", "APPLIED", "REJECTED", "ABSTAINED", "STALE", "ESCALATED"].includes(status);
+  return ["COMPLETED", "ATTENTION"].includes(status);
 }
 
 function renderEvents(events) {
   if (!events.length) return `<div class="error-state"><p>${esc(t("timeline.empty"))}</p></div>`;
   return events.map(event => {
-    const eventStatus = event.type.includes("REJECT") || event.type.includes("REGRESSION") ? "failed"
-      : event.type.includes("ABSTAIN") || event.type.includes("STALE") || event.type.includes("SELECTED") ? "warning"
-      : event.type.includes("VERIFIED") || event.type.includes("ADMITTED") || event.type.includes("RECERTIFIED") || event.type.includes("APPLIED") ? "passed" : "running";
+    const eventStatus = String(event.data?.result || "").includes("failure") ? "failed"
+      : event.type.includes("ATTRIBUTED") ? "warning"
+      : event.type.includes("COMPLETED") || event.type.includes("RESULT") ? "passed" : "running";
     const detail = Object.entries(event.data || {}).slice(0, 2).map(([key, value]) => `${humanize(key)}: ${value}`).join(" · ");
     return `<div class="event" style="--event-color:${graphColor(eventStatus)}">
       <time>${clock(event.timestamp)}</time><i class="event-dot"></i>
@@ -490,6 +490,10 @@ function nodeIcon(kind) {
     apply: `<path d="M20 29h16M30 23l6 6-6 6M20 22v14"/>`,
     guard: `<path d="M28 19l8 4v6c0 6-3 9-8 11-5-2-8-5-8-11v-6z"/>`,
     integrity: `<path d="M28 20 37 37H19zM28 26v5M28 34v1"/>`
+    ,session: `<path d="M21 23h14v11H21zM25 38h6M28 34v4"/>`
+    ,skill: `<path d="M21 23h6v6h-6zM29 23h6v6h-6zM21 31h6v6h-6zM29 31h6v6h-6z"/>`
+    ,tool: `<path d="M22 23h12v12H22zM25 20v3M31 20v3M25 35v3M31 35v3"/>`
+    ,outcome: `<circle cx="28" cy="29" r="9"/><path d="m24 29 3 3 5-6"/>`
   };
   return `<g class="node-icon">${icons[kind] || icons.goal}</g>`;
 }

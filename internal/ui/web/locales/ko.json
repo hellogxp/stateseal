@@ -1,17 +1,17 @@
 {
-  "common.language": "언어", "common.loading": "신뢰할 수 있는 로컬 상태를 읽는 중…", "common.candidates": "후보", "common.evidence": "증거", "common.checkpoints": "체크포인트",
+  "common.language": "언어", "common.loading": "로컬 Agent 활동을 읽는 중…", "common.candidates": "도구 호출", "common.evidence": "관측 이벤트", "common.checkpoints": "Skills",
   "connection.live": "실시간", "connection.offline": "오프라인", "connection.reconnecting": "재연결 중",
-  "empty.eyebrow": "아직 실행 없음", "empty.title": "검증된 에이전트 워크플로가 여기에 표시됩니다.", "empty.body": "StateSeal이 활성화된 저장소에서 실행을 시작하면 외부 권한 상태를 자동으로 감시합니다.",
+  "empty.eyebrow": "관측된 세션 없음", "empty.title": "Agent 활동이 자동으로 표시됩니다.", "empty.body": "StateSeal은 Hook이나 Agent 제어 없이 로컬 세션을 읽습니다.",
   "error.eyebrow": "로컬 상태 사용 불가", "error.title": "StateSeal 실행을 불러올 수 없습니다", "time.justNow": "방금",
-  "runs.eyebrow": "검증된 에이전트 워크플로", "runs.title": "실행", "runs.description": "신뢰할 수 있는 로컬 상태에서 모든 후보, 검증 결정, 복구 및 명시적 적용을 확인합니다.", "runs.total": "전체 실행", "runs.search": "목표, 작업, 저장소 검색…", "runs.noMatch": "이 보기에 일치하는 실행이 없습니다.", "runs.progress": "의도 → 후보 → 체크포인트 → 결정 → 적용",
-  "filter.all": "전체", "filter.active": "진행 중", "filter.admitted": "승인됨", "filter.notAdmitted": "미승인",
-  "status.active": "진행 중", "status.admitted": "승인됨", "status.notAdmitted": "미승인", "status.passed": "통과", "status.recovered": "복구됨", "status.blocked": "차단됨",
+  "runs.eyebrow": "읽기 전용 런타임 인텔리전스", "runs.title": "Agent 실행 파노라마", "runs.description": "Agent에 개입하지 않고 도구, Skill 귀속, 산출물, 실패 및 보고 결과를 표시합니다.", "runs.total": "세션", "runs.search": "목표, 작업, 저장소 검색…", "runs.noMatch": "이 보기에 일치하는 실행이 없습니다.", "runs.progress": "요청 → Skill → 도구 → 산출물 → 관측 결과",
+  "filter.all": "전체", "filter.active": "진행 중", "filter.admitted": "완료", "filter.notAdmitted": "주의",
+  "status.active": "진행 중", "status.admitted": "완료", "status.notAdmitted": "주의", "status.passed": "관측됨", "status.recovered": "파생", "status.blocked": "주의",
   "integrity.warning": "원장 무결성 경고", "integrity.detail": "원장 무결성 경고: {error}",
   "detail.projecting": "상태 출처를 구성하는 중…", "detail.allRuns": "모든 실행", "detail.updated": "{time} 업데이트", "detail.disposition": "처리 결과", "detail.pending": "대기 중", "detail.mode": "{mode} 모드", "detail.inProgress": "실행 중", "detail.duration": "소요 시간", "detail.started": "{time} 시작", "detail.awaitingEvent": "첫 이벤트 대기 중", "detail.candidateStats": "{rejected}개 거부 · {checkpoints}개 체크포인트", "detail.recovered": "복구 체크포인트 재인증됨", "detail.stateBound": "상태에 바인딩된 실행",
-  "dag.title": "상태 출처 DAG", "dag.help": "노드를 클릭하여 바인딩된 상태와 증거를 확인하세요.", "dag.aria": "실행 상태 출처 그래프",
-  "timeline.title": "신뢰할 수 있는 이벤트 타임라인", "timeline.help": "해시 연속성을 가진 추가 전용 원장.", "timeline.events": "이벤트", "timeline.empty": "기록된 신뢰 이벤트가 없습니다.",
+  "dag.title": "실행 파노라마 및 귀속 DAG", "dag.help": "노드를 클릭하여 Observed, Derived, Inferred를 확인하세요.", "dag.aria": "Agent 실행 파노라마",
+  "timeline.title": "관측 이벤트 타임라인", "timeline.help": "Agent 자체 로그에서 읽기 전용으로 재구성.", "timeline.events": "이벤트", "timeline.empty": "관측 이벤트가 없습니다.",
   "evidence.title": "검증기 증거", "evidence.help": "정확한 코드 상태에 바인딩된 새 실행.", "evidence.records": "기록", "evidence.empty": "검증기 증거가 없습니다.", "evidence.timedOut": "시간 초과", "evidence.failed": "실패", "evidence.verifier": "검증기", "evidence.noOutput": "캡처된 출력이 없습니다.",
   "receipt.title": "완료 영수증", "receipt.help": "암호학적 결정 산출물.", "receipt.verdict": "판정", "receipt.rule": "규칙", "receipt.checkpoint": "체크포인트", "receipt.id": "영수증 ID", "receipt.digest": "다이제스트",
   "inspector.close": "검사기 닫기", "inspector.status": "상태", "inspector.timestamp": "타임스탬프",
-  "node.goal": "작업 의도", "node.candidate": "후보", "node.guard": "정책 가드", "node.verifier": "검증기", "node.regression": "회귀 감지", "node.rejection": "후보 거부됨", "node.checkpoint": "검증된 체크포인트", "node.selection": "체크포인트 선택됨", "node.restore": "체크포인트 복원됨", "node.recertification": "재인증됨", "node.receipt": "완료 영수증", "node.apply": "적용됨", "node.integrity": "원장 무결성"
+  "node.goal": "작업 의도", "node.candidate": "후보", "node.guard": "정책 가드", "node.verifier": "검증기", "node.regression": "회귀 감지", "node.rejection": "후보 거부됨", "node.checkpoint": "검증된 체크포인트", "node.selection": "체크포인트 선택됨", "node.restore": "체크포인트 복원됨", "node.recertification": "재인증됨", "node.receipt": "완료 영수증", "node.apply": "적용됨", "node.integrity": "데이터 무결성", "node.session": "Agent 세션", "node.skill": "Skill 귀속", "node.tool": "도구 호출", "node.outcome": "관측 결과"
 }

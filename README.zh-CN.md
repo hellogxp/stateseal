@@ -5,110 +5,93 @@
 [Português do Brasil](README.pt-BR.md) · [Deutsch](README.de.md) ·
 [Français](README.fr.md)
 
-StateSeal 将 Coding Agent 产生的候选代码转换为与精确代码状态绑定、经过独立验证、
-可恢复、可重新认证并且可审计的交付结果，同时明确披露验证覆盖和剩余风险。
+StateSeal 是面向 Coding Agent 的**只读运行时智能层**。它把一次交付中的用户请求、
+Skill、工具、产物、失败和 Agent 报告结果重建成实时全景图，但不启动、不引导、
+不阻断、不审批，也不应用 Agent 的工作。
 
-> 模型提出修改，证据支持判断，Broker 决定准入，Git 保存历史，用户确认应用。
+> 观察执行，解释链路，但绝不成为执行的一部分。
 
-StateSeal 不是另一个 Coding Agent，也不会替代测试。它包装现有 Agent 和验证命令，
-确保最终交付的代码正是经过验证的代码。
+![StateSeal 运行全景图](docs/assets/stateseal-runs-console.svg)
 
-![StateSeal 可信交付链路](docs/assets/stateseal-trust-pipeline.svg)
+## 解决什么问题
 
-## 核心能力
+Agent 的运行证据通常分散在消息、工具调用、文件、测试输出和子 Agent 中。
+StateSeal 帮助开发者快速回答：
 
-| 能力 | 解决的问题 |
-| --- | --- |
-| 精确状态绑定 | 证明验证结果属于哪一个代码树，而不是“某次运行曾经通过” |
-| 独立验证 | 在干净 evaluator 中执行项目策略，避免 Agent 自报成功 |
-| 检查点恢复 | 后续候选回归时保留并重新认证最后一个可信状态 |
-| 外部准入 | Broker 根据证据、覆盖和策略决定最终处置 |
-| 可审计凭证 | 记录事件链、证据来源、覆盖范围和剩余风险 |
+- 预期的 Skill 是否被发现并真正使用；
+- 哪些工具按什么顺序执行，哪里失败；
+- 生成或修改了哪些文件和产物；
+- 哪些是明确观测，哪些是派生归因，哪些只是诊断推断；
+- 时间花在哪里，失败会话应该从哪里排查。
 
-## 为什么需要 StateSeal
-
-长时间运行的 Agent 可能先让测试通过，随后继续修改并引入回归，却仍然报告成功。
-StateSeal 将候选状态、验证证据、检查点、重新认证和最终准入变成明确的协议状态：
+## 不可破坏的产品边界
 
 ```text
-WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
-                           ↘ REJECTED                 ↘ STALE / ABSTAINED
+Agent 自有会话日志 + 本地产物
+                ↓  只读
+          标准化与关联
+                ↓
+      全景 · 归因 · 诊断 · 审计
 ```
 
-准入由外部 Broker 决定。失败的候选状态不会覆盖已经验证的检查点。
+StateSeal 不安装生命周期 Hook、不代理模型请求、不启动或接管 Agent、不修改 Prompt、
+不返回 deny/block、不审批交付、不修改分支、不应用代码。执行及其结果始终由 Agent
+和用户负责。
+
+所有分析均标注证据等级：
+
+| 等级 | 含义 |
+| --- | --- |
+| **Observed / 明确观测** | 直接来自 Agent 会话或本地运行事件 |
+| **Derived / 派生** | 根据调用 ID、路径和时间确定性关联 |
+| **Inferred / 推断** | 诊断假设，可用于排查，但不冒充事实 |
 
 ## 快速开始
 
-推荐安装由 GitHub Actions 从确定 Git tag 构建的发行版；安装器会选择当前平台、
-校验 SHA-256 后安装到 `~/.local/bin`：
+源码安装需要 Go 1.24 或更高版本：
 
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+make install
 export PATH="$HOME/.local/bin:$PATH"
-seal version
-```
-
-Codex 推荐安装仓库随附的 StateSeal Plugin。Plugin 已包含 Skill 与 MCP
-注册，MCP server 由已安装的 StateSeal Core 提供，因此不需要再单独安装一个
-“MCP 产品”：
-
-```bash
-codex plugin marketplace add /path/to/stateseal
-codex plugin add stateseal@stateseal
-```
-
-第一条命令只是把当前源码目录登记为本机 Codex 可发现的 Plugin marketplace；
-不会上传代码、注册线上账号，也不会额外安装一套 MCP 服务。正式 marketplace
-发行后可以隐藏这一步面向开发者的源码注册。
-
-安装后新建 Codex 任务，普通代码需求会自动且可见地介入。`@stateseal` 以及
-`/seal status`、`/seal on`、`/seal off`、`/seal run`、`/seal exclude`
-仅作为可选控制入口。项目首次启用合同和最终 Apply 仍使用 Agent 原生明确确认。
-
-Plugin 不可用时，可使用兼容安装或直接调用通用 CLI 边界：
-
-```bash
-seal install codex-desktop
-seal run --repo /path/to/repository "修复重复回调，并保持现有接口兼容"
-```
-
-匿名评审或源码检出可在仓库中执行 `make install`，要求 Git 与 Go 1.24 或更高版本。
-
-查看本机所有仓库的运行记录：
-
-```bash
 seal ui
 ```
 
-Runs Console 提供实时列表、状态溯源 DAG、验证器证据、可信事件时间线、
-检查点恢复过程和带密码学摘要的完成凭证。UI 只读，并且只监听本机回环地址。
+也可以安装发布版本：
 
-![StateSeal Runs Console](docs/assets/stateseal-runs-console.svg)
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL \
+  https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+seal ui
+```
 
-## 适配与自动化
+UI 只监听本机回环地址，旁路发现 Codex 本地 JSONL 会话，并在 Agent 运行时持续刷新。
+默认不展示原始工具参数和完整输出。
 
-StateSeal 支持 Codex Desktop、Codex CLI、Claude Code 和 Qoder 的集成路径；
-其他终端 Agent 可通过 `seal run -- <command>` 使用同一验证协议。结构化 JSON、
-稳定规则 ID 和完成凭证可用于 CI、评测与研究复现。
+## 当前能力
 
-StateSeal 会区分“健康的验证拒绝”和“StateSeal 自身不可用”。前者在 enforce
-模式下仍然阻止未验证代码交付；确认能力、MCP、Store 或隔离 Worker 故障时，
-StateSeal 返回可见的降级状态，Agent 继续原生开发，并将结果明确标记为
-`UNVERIFIED`，不会伪造 Receipt。最终 Apply 永不自动放行；确认不可用或被拒绝
-时保留已验证 Checkpoint，用户源分支保持不变。
+- Codex 本地会话的无 Hook、只读发现；
+- 实时会话总览和事件时间线；
+- 请求 → Skill → 工具 → 观测结果的归因 DAG；
+- 明确区分 Observed / Derived / Inferred；
+- 隐私优先摘要和常见密钥脱敏；
+- 以只读历史档案展示旧版 StateSeal 证据；
+- 八种 UI 语言。
 
-## 安全边界
+## 默认命令
 
-`ADMITTED` 只表示精确检查点通过了 `seal.yaml` 中配置的验证策略。它不证明需求或
-测试套件完整，也不证明执行主机未被攻破。StateSeal 因此始终报告验证覆盖、证据来源
-和剩余风险；用户分支在显式应用成功前保持不变。
+`seal ui` 打开运行全景图，`seal workspace list` 只读发现仓库，
+`seal version` 显示构建身份。
+
+受控执行、验证 Gate、准入、Apply、恢复、生命周期 Hook 安装和交付控制 MCP
+工具均不再注册。
 
 ## 文档
 
-- [中文文档中心](docs/zh-CN/index.md)
+- [文档中心](docs/zh-CN/index.md)
 - [快速上手](docs/zh-CN/getting-started.md)
-- [Runs Console](docs/zh-CN/runs-console.md)
+- [运行全景图](docs/zh-CN/runs-console.md)
 - [产品全景](docs/zh-CN/product-map.md)
-- [英文技术参考](docs/index.md)
+- [英文观察模型](docs/observation-model.md)
 
-协议字段、命令、digest 和日志保留英文原值，避免审计语义在翻译中发生变化。
+Apache-2.0 License。

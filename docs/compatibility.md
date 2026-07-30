@@ -1,5 +1,8 @@
 # Agent compatibility
 
+> **Historical managed-delivery matrix.** Current compatibility is limited to
+> read-only transcript adapters; no Agent-control integration is supported.
+
 StateSeal separates generated adapter-contract tests from live Agent validation.
 An adapter is listed as `lifecycle` only after its public hook surface captures
 an intermediate candidate and its outer managed run certifies the terminal
@@ -16,7 +19,7 @@ Support levels are evidence-based:
 | Agent surface | Validated version | Coverage | Level | Notes |
 | --- | --- | --- | --- | --- |
 | Codex CLI | 0.144.5 | `intermediate + terminal` | verified | `PostToolUse` preserved a passing checkpoint; terminal regression recovered under `CP001` |
-| Codex Desktop | 26.715.52143 observed | Plugin/MCP-controlled isolated delivery | experimental | A live run exposed recursive child routing, empty-candidate admission, inaccurate apply reporting, and missing hard user acceptance. The implementation now guards recursion, requires non-empty delivery, binds the real branch, uses a single host-tool approval, installs protected project hooks, and degrades infrastructure failures without blocking ordinary development; pinned live revalidation remains required. |
+| Codex Desktop | 26.715.52143 observed | Plugin/MCP-controlled isolated delivery | experimental | A live run exposed recursive child routing, empty-candidate admission, inaccurate apply reporting, and missing hard user acceptance. The implementation now guards recursion, requires non-empty delivery, binds the real branch, automatically routes non-Git workspaces from explainable read-only evidence, uses a single host-tool approval, installs protected project hooks, and degrades infrastructure failures without blocking ordinary development; pinned live revalidation remains required. |
 | Claude Code CLI / IDE | Pending | contract only | experimental | Non-destructive user/project configuration and static doctor pass; live validation required |
 | Qoder CLI / IDE / JetBrains | Pending | contract only | experimental | Official shared hook configuration, blocking `Stop`, and retry guard are implemented; live validation required |
 | Gemini CLI | Pending | contract only | contract-only | Live validation required |

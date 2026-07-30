@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>StateSeal Runs</title>
+  <title>StateSeal Runtime Intelligence</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
       <span class="brand-mark" aria-hidden="true"><span></span></span>
       <span>
         <strong>StateSeal</strong>
-        <small>Local control plane</small>
+        <small>Runtime intelligence</small>
       </span>
     </a>
     <div class="topbar-actions">
@@ -42,17 +42,17 @@
   <main id="app" class="app" aria-live="polite">
     <section class="loading-state">
       <span class="loader"></span>
-      <p id="loading-copy">Reading trusted local state…</p>
+      <p id="loading-copy">Reading local Agent activity…</p>
     </section>
   </main>
 
   <template id="empty-template">
     <section class="empty-state panel">
       <div class="empty-orbit"><span></span></div>
-      <p class="eyebrow" data-i18n="empty.eyebrow">NO RUNS YET</p>
-      <h1 data-i18n="empty.title">Your verified agent workflows will appear here.</h1>
-      <p data-i18n="empty.body">Start one in a StateSeal-enabled repository. This console watches external authority state automatically.</p>
-      <code>seal run "Describe the change"</code>
+      <p class="eyebrow" data-i18n="empty.eyebrow">NO SESSIONS OBSERVED</p>
+      <h1 data-i18n="empty.title">Agent activity will appear here automatically.</h1>
+      <p data-i18n="empty.body">StateSeal reads supported local session logs without hooks, proxies, or changes to Agent execution.</p>
+      <code>seal ui</code>
     </section>
   </template>
 

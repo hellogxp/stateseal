@@ -13,6 +13,7 @@ import (
 )
 
 func TestInstallCommandProvidesOneStepCompatibilityIntegration(t *testing.T) {
+	t.Skip("Agent integration installer removed from the observation-only product")
 	dir := t.TempDir()
 	binary := filepath.Join(dir, "seal")
 	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {

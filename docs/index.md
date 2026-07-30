@@ -5,19 +5,18 @@
 [Português do Brasil](pt-BR/index.md) · [Deutsch](de/index.md) ·
 [Français](fr/index.md)
 
-![StateSeal trusted delivery pipeline](assets/stateseal-trust-pipeline.svg)
+StateSeal is a local, read-only runtime intelligence layer for coding agents.
+It observes Agent-owned session logs and local artifacts; it does not
+participate in execution.
 
 | Read this | When you need |
 | --- | --- |
-| [Artifact evaluation](../ARTIFACT.md) | Reproduce the build and deterministic conformance evidence from an anonymous source snapshot |
-| [Getting started](getting-started.md) | Installation and the first verified delivery |
-| [Runs console](runs-console.md) | Live all-runs overview, provenance DAG, evidence, and local security model |
-| [Localization policy](localization.md) | Supported locales, fallback rules, translation contract and CI |
-| [Product map](product-map.md) | User flow, architecture, capability status and roadmap |
-| [Verification model](verification-model.md) | L0–L3 coverage, provenance, safety and liveness |
-| [Threat model](threat-model.md) | Covered failures, trust boundary and explicit exclusions |
-| [Agent compatibility](compatibility.md) | Evidence-based support levels by Agent surface |
-| [Agent adapters](adapters.md) | Lifecycle and MCP integration contracts |
-| [Reliability rules](rules.md) | Stable rule IDs, dispositions and next actions |
-| [Research evidence](research-evidence.md) | Supported design obligations and claim limits |
-| [SealBench](../sealbench/README.md) | Deterministic failure-injection coverage |
+| [Getting started](getting-started.md) | Install and open the live panorama |
+| [Runtime panorama](runs-console.md) | Understand the session list, DAG, timeline, and evidence grades |
+| [Observation model](observation-model.md) | Understand sources, privacy, attribution, and claim limits |
+| [Product map](product-map.md) | Review architecture, modules, and roadmap |
+| [Localization policy](localization.md) | Review locale and fallback behavior |
+
+Documents describing the former managed-delivery experiment are retained only
+as historical research material. They are not part of the current product
+surface and must not be used to configure Agent execution.

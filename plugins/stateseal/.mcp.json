@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "stateseal": {
-      "command": "./scripts/stateseal-mcp",
-      "args": [],
-      "cwd": "."
-    }
-  }
-}

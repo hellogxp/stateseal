@@ -16,6 +16,7 @@ import (
 )
 
 func TestProjectExclusionDisablesAutomaticMCPUntilExplicitInclude(t *testing.T) {
+	t.Skip("delivery-control MCP integration removed from the observation-only product")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()
 	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
@@ -457,20 +458,31 @@ func TestMCPHostToolApprovalDoesNotRequireSecondElicitation(t *testing.T) {
 	}
 }
 
-func TestMCPWorkspaceRequiresExplicitRepositorySelection(t *testing.T) {
+func TestMCPWorkspaceAutomaticallyRoutesGoalBeforeClarifyingTrueAmbiguity(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"api", "web"} {
 		initializeMCPTestRepoAt(t, filepath.Join(root, name), name)
 	}
-	inspection, err := inspectMCPWorkspace(root, "", "codex")
+	routed, err := inspectMCPWorkspace(root, "", "Update the web project input validation", "codex")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inspection.ReasonCode != "REPOSITORY_SELECTION_REQUIRED" || len(inspection.Repositories) != 2 ||
-		inspection.AuthorityStatus != "needs_user_action" {
-		t.Fatalf("workspace did not require explicit selection: %+v", inspection)
+	if routed.Project != "web" || routed.RoutingMethod != "goal_and_workspace_evidence" ||
+		routed.RoutingConfidence != "high" {
+		t.Fatalf("workspace did not automatically route the named project: %+v", routed)
 	}
-	selected, err := inspectMCPWorkspace(root, "web", "codex")
+
+	ambiguous, err := inspectMCPWorkspace(root, "", "Implement the requested feature", "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ambiguous.ReasonCode != "REPOSITORY_ROUTING_AMBIGUOUS" || len(ambiguous.Repositories) != 2 ||
+		ambiguous.AuthorityStatus != "needs_user_action" ||
+		!strings.Contains(ambiguous.NextAction, "natural-language project question") {
+		t.Fatalf("workspace did not preserve genuine product ambiguity: %+v", ambiguous)
+	}
+
+	selected, err := inspectMCPWorkspace(root, "web", "", "codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,6 +492,7 @@ func TestMCPWorkspaceRequiresExplicitRepositorySelection(t *testing.T) {
 }
 
 func TestMCPDeliveryLeavesSourceUntouchedUntilExactReceiptIsApproved(t *testing.T) {
+	t.Skip("delivery-control MCP integration removed from the observation-only product")
 	stateHome := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateHome)
 	root := t.TempDir()

@@ -14,6 +14,7 @@ import (
 
 func TestRunsAPIProjectsTrustedStateAndGraph(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("STATESEAL_UI_SOURCE", "legacy")
 	taskStore, err := store.Open("/work/payments", "fix-callback")
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +97,7 @@ func TestRunsAPIProjectsTrustedStateAndGraph(t *testing.T) {
 
 func TestRunsAPITruncatesLargeVerifierOutput(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("STATESEAL_UI_SOURCE", "legacy")
 	taskStore, err := store.Open("/work/repo", "large-output")
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +126,7 @@ func TestStaticConsoleIsEmbedded(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "StateSeal Runs") {
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "StateSeal Runtime Intelligence") {
 		t.Fatalf("embedded console unavailable: %d %s", recorder.Code, recorder.Body.String())
 	}
 	recorder = httptest.NewRecorder()

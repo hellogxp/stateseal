@@ -60,13 +60,35 @@ type RunSnapshot struct {
 }
 
 func LoadSnapshots() ([]RunSnapshot, error) {
-	tasks, err := store.ListTasks()
+	// Passive Agent transcripts are the primary runtime source. Reading them is
+	// side-effect free and does not require hooks, an MCP server, or an Agent
+	// wrapper.
+	passive, err := loadPassiveSnapshots()
 	if err != nil {
 		return nil, err
 	}
-	snapshots := make([]RunSnapshot, 0, len(tasks))
+	tasks, err := store.ListTasks()
+	if err != nil {
+		if len(passive) > 0 {
+			return passive, nil
+		}
+		return nil, err
+	}
+	snapshots := make([]RunSnapshot, 0, len(passive)+len(tasks))
+	snapshots = append(snapshots, passive...)
 	for _, task := range tasks {
-		snapshots = append(snapshots, project(task))
+		legacy := project(task)
+		legacy.Summary.Mode = "legacy evidence archive"
+		legacy.Summary.Disposition = "historical record"
+		switch legacy.Summary.Status {
+		case "WORKING", "VERIFYING", "VERIFIED":
+			legacy.Summary.Status = "ACTIVE"
+		case "REJECTED", "ABSTAINED", "STALE", "ESCALATED":
+			legacy.Summary.Status = "ATTENTION"
+		default:
+			legacy.Summary.Status = "COMPLETED"
+		}
+		snapshots = append(snapshots, legacy)
 	}
 	sort.Slice(snapshots, func(i, j int) bool {
 		return snapshots[i].Summary.UpdatedAt.After(snapshots[j].Summary.UpdatedAt)

@@ -23,7 +23,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const stateSealMCPInstructions = "StateSeal is the visible verified-delivery authority for code-changing work. Do not invoke it for explanation, search, planning, or other read-only work. For a code-changing request, call inspect_project before editing and show the selected Workspace, Repository, Agent, execution mode, and delivery stages. If multiple repositories are returned, let the user select one. If the project is excluded or StateSeal reports degraded or unavailable authority, continue with the Agent's normal workflow, clearly label the delivery UNVERIFIED, and never claim a StateSeal receipt. StateSeal infrastructure failures must not stop ordinary development. If the project is enabled, call start_delivery and do not edit the source workspace directly. If it is not enabled, present the verification contract and call enable_project. A healthy StateSeal verification rejection remains authoritative in enforce mode and must not be bypassed. After an admitted delivery, present changed files, checks, durations, exact code state, coverage, receipt, and residual risks, then call apply_verified. Final apply always requires explicit user approval; if approval is unavailable or declined, preserve the verified checkpoint and leave the source branch unchanged."
+const stateSealMCPInstructions = "StateSeal is the visible verified-delivery authority for code-changing work. Do not invoke it for explanation, search, planning, or other read-only work. For a code-changing request, call inspect_project with the user's complete goal before editing. StateSeal automatically routes a non-Git workspace to the relevant repository using the goal and read-only workspace evidence; ordinary users must not be asked to identify a Git repository or supply a path. Show the selected Workspace, Repository, routing evidence, Agent, execution mode, and delivery stages. If routing remains genuinely ambiguous, first use the Agent's existing context and read-only search to disambiguate. Only if product intent is still ambiguous, ask a natural-language project question and call inspect_project again with the inferred repository; never silently choose the first repository. If the project is excluded or StateSeal reports degraded or unavailable authority, continue with the Agent's normal workflow, clearly label the delivery UNVERIFIED, and never claim a StateSeal receipt. StateSeal infrastructure failures must not stop ordinary development. If the project is enabled, call start_delivery and do not edit the source workspace directly. If it is not enabled, present the verification contract and call enable_project. A healthy StateSeal verification rejection remains authoritative in enforce mode and must not be bypassed. After an admitted delivery, present changed files, checks, durations, exact code state, coverage, receipt, and residual risks, then call apply_verified. Final apply always requires explicit user approval; if approval is unavailable or declined, preserve the verified checkpoint and leave the source branch unchanged."
 
 const (
 	mcpConfirmationElicitation = "elicitation"
@@ -32,7 +32,8 @@ const (
 
 type mcpProjectInput struct {
 	RepoPath   string `json:"repo_path" jsonschema:"absolute path to the workspace or Git project currently open in the Agent desktop"`
-	Repository string `json:"repository,omitempty" jsonschema:"optional repository path or unambiguous name when the workspace contains multiple Git repositories"`
+	Repository string `json:"repository,omitempty" jsonschema:"optional repository inferred by the Agent after read-only analysis when automatic routing remains ambiguous"`
+	Goal       string `json:"goal,omitempty" jsonschema:"the user's complete development goal in their original language, used for automatic workspace routing"`
 }
 
 type mcpEnableProjectInput struct {
@@ -55,33 +56,37 @@ type mcpApplyInput struct {
 }
 
 type mcpProjectInspection struct {
-	Workspace            string                    `json:"workspace,omitempty"`
-	Project              string                    `json:"project"`
-	RepoRoot             string                    `json:"repo_root"`
-	Repositories         []workspacepkg.Repository `json:"repositories,omitempty"`
-	Agent                string                    `json:"agent,omitempty"`
-	Enabled              bool                      `json:"enabled"`
-	Excluded             bool                      `json:"excluded"`
-	ExclusionReason      string                    `json:"exclusion_reason,omitempty"`
-	ExcludedAt           string                    `json:"excluded_at,omitempty"`
-	ConfirmationRequired bool                      `json:"confirmation_required"`
-	Admission            []string                  `json:"admission"`
-	Completion           []string                  `json:"completion"`
-	Protected            []string                  `json:"protected"`
-	Execution            string                    `json:"execution"`
-	ResidualRisks        []string                  `json:"residual_risks,omitempty"`
-	VerifierProvenance   []mcpVerifierPlan         `json:"verifier_provenance"`
-	SetupToken           string                    `json:"setup_token,omitempty"`
-	PolicyDigest         string                    `json:"policy_digest"`
-	ConfigCommit         string                    `json:"config_commit,omitempty"`
-	AuthorityStatus      string                    `json:"authority_status,omitempty"`
-	ReasonCode           string                    `json:"reason_code,omitempty"`
-	Reason               string                    `json:"reason,omitempty"`
-	Retryable            bool                      `json:"retryable,omitempty"`
-	SafeState            *mcpSafeState             `json:"safe_state,omitempty"`
-	AllowedActions       []string                  `json:"allowed_actions,omitempty"`
-	Unverified           bool                      `json:"unverified,omitempty"`
-	NextAction           string                    `json:"next_action"`
+	Workspace            string                        `json:"workspace,omitempty"`
+	Project              string                        `json:"project"`
+	RepoRoot             string                        `json:"repo_root"`
+	Repositories         []workspacepkg.Repository     `json:"repositories,omitempty"`
+	RoutingCandidates    []workspacepkg.RouteCandidate `json:"routing_candidates,omitempty"`
+	RoutingMethod        string                        `json:"routing_method,omitempty"`
+	RoutingConfidence    string                        `json:"routing_confidence,omitempty"`
+	RoutingEvidence      []string                      `json:"routing_evidence,omitempty"`
+	Agent                string                        `json:"agent,omitempty"`
+	Enabled              bool                          `json:"enabled"`
+	Excluded             bool                          `json:"excluded"`
+	ExclusionReason      string                        `json:"exclusion_reason,omitempty"`
+	ExcludedAt           string                        `json:"excluded_at,omitempty"`
+	ConfirmationRequired bool                          `json:"confirmation_required"`
+	Admission            []string                      `json:"admission"`
+	Completion           []string                      `json:"completion"`
+	Protected            []string                      `json:"protected"`
+	Execution            string                        `json:"execution"`
+	ResidualRisks        []string                      `json:"residual_risks,omitempty"`
+	VerifierProvenance   []mcpVerifierPlan             `json:"verifier_provenance"`
+	SetupToken           string                        `json:"setup_token,omitempty"`
+	PolicyDigest         string                        `json:"policy_digest"`
+	ConfigCommit         string                        `json:"config_commit,omitempty"`
+	AuthorityStatus      string                        `json:"authority_status,omitempty"`
+	ReasonCode           string                        `json:"reason_code,omitempty"`
+	Reason               string                        `json:"reason,omitempty"`
+	Retryable            bool                          `json:"retryable,omitempty"`
+	SafeState            *mcpSafeState                 `json:"safe_state,omitempty"`
+	AllowedActions       []string                      `json:"allowed_actions,omitempty"`
+	Unverified           bool                          `json:"unverified,omitempty"`
+	NextAction           string                        `json:"next_action"`
 }
 
 type mcpSafeState struct {
@@ -135,10 +140,10 @@ func newStateSealMCPServerWithConfirmation(agent, confirmation string) *mcp.Serv
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "inspect_project", Title: "Inspect StateSeal project policy",
-		Description: "Inspect the current workspace without modifying it, discover contained Git repositories, select a repository, and show the exact verification contract. Use this first for every code-changing request.",
+		Description: "Inspect the current workspace without modifying it, automatically route the user's goal to the relevant repository using read-only evidence, and show the exact verification contract. Use this first for every code-changing request.",
 		Annotations: mcpAnnotations(true, false, true, false),
 	}, func(_ context.Context, _ *mcp.CallToolRequest, input mcpProjectInput) (*mcp.CallToolResult, mcpProjectInspection, error) {
-		inspection, err := inspectMCPWorkspace(input.RepoPath, input.Repository, agent)
+		inspection, err := inspectMCPWorkspace(input.RepoPath, input.Repository, input.Goal, agent)
 		if err != nil {
 			return nil, degradedProjectInspectionForError(input.RepoPath, "PROJECT_INSPECTION_FAILED", err), nil
 		}
@@ -342,14 +347,15 @@ func mcpAnnotations(readOnly, destructive, idempotent, openWorld bool) *mcp.Tool
 
 func boolPointer(value bool) *bool { return &value }
 
-func inspectMCPWorkspace(path, repository, agent string) (mcpProjectInspection, error) {
+func inspectMCPWorkspace(path, repository, goal, agent string) (mcpProjectInspection, error) {
 	if strings.TrimSpace(path) == "" {
 		return mcpProjectInspection{}, fmt.Errorf("repo_path is required")
 	}
-	workspace, err := workspacepkg.Inspect(path)
+	routing, err := workspacepkg.Route(path, repository, goal)
 	if err != nil {
 		return mcpProjectInspection{}, err
 	}
+	workspace := routing.Inspection
 	if len(workspace.Repositories) == 0 {
 		return mcpProjectInspection{
 			Workspace: workspace.Root, Repositories: workspace.Repositories,
@@ -359,25 +365,27 @@ func inspectMCPWorkspace(path, repository, agent string) (mcpProjectInspection, 
 			NextAction: "StateSeal requires a Git repository for state-bound delivery; continue with the Agent's normal workflow and disclose that the result is UNVERIFIED",
 		}, nil
 	}
-	if strings.TrimSpace(repository) == "" && len(workspace.Repositories) > 1 {
+	if routing.Selected == nil {
 		return mcpProjectInspection{
 			Workspace: workspace.Root, Repositories: workspace.Repositories,
-			AuthorityStatus: "needs_user_action", ReasonCode: "REPOSITORY_SELECTION_REQUIRED",
-			AllowedActions: []string{"select_repository", "exclude_project"},
+			RoutingCandidates: routing.Candidates, RoutingMethod: "ambiguous",
+			AuthorityStatus: "needs_user_action", ReasonCode: "REPOSITORY_ROUTING_AMBIGUOUS",
+			AllowedActions: []string{"analyze_workspace_read_only", "clarify_project_intent", "exclude_project"},
 			SafeState:      &mcpSafeState{SourceWorkspaceChanged: false, CandidatePreserved: false},
-			NextAction:     "show the discovered repositories and ask the user which repository this development goal targets, then call inspect_project again with repository",
+			NextAction:     "use the Agent's current context and read-only workspace search to infer the project without asking for a Git path; only if product intent remains ambiguous, ask a natural-language project question and call inspect_project again with repository",
 		}, nil
 	}
-	root, err := workspacepkg.Resolve(path, repository)
-	if err != nil {
-		return mcpProjectInspection{}, err
-	}
+	root := routing.Selected.Root
 	inspection, err := inspectMCPProject(root, agent)
 	if err != nil {
 		return mcpProjectInspection{}, err
 	}
 	inspection.Workspace = workspace.Root
 	inspection.Repositories = workspace.Repositories
+	inspection.RoutingCandidates = routing.Candidates
+	inspection.RoutingMethod = routing.Method
+	inspection.RoutingConfidence = routing.Confidence
+	inspection.RoutingEvidence = routing.Evidence
 	return inspection, nil
 }
 

@@ -1,91 +1,24 @@
 # StateSeal
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) ·
-[한국어](README.ko.md) · [Español](README.es.md) · **Português do Brasil** ·
-[Deutsch](README.de.md) · [Français](README.fr.md)
+[한국어](README.ko.md) · [Español](README.es.md) ·
+**Português do Brasil** · [Deutsch](README.de.md) · [Français](README.fr.md)
 
-O StateSeal transforma candidatos produzidos por Coding Agents em resultados de
-entrega vinculados ao estado exato do código, verificados de forma independente,
-recuperáveis, recertificáveis e auditáveis. A cobertura da verificação e os
-riscos residuais também ficam explícitos.
+StateSeal é uma **camada de inteligência de runtime somente leitura** para
+agentes de programação. Ela reconstrói solicitações, Skills, ferramentas,
+artefatos, falhas e resultados relatados pelo Agent em um panorama em tempo
+real.
 
-> O modelo propõe. A evidência informa. O Broker decide. O Git registra. O usuário aplica.
-
-O StateSeal não é outro Coding Agent e não substitui seus testes. Ele envolve o
-Agent e os comandos de verificação existentes para garantir que o código
-entregue seja exatamente o código verificado.
-
-![Pipeline de entrega confiável do StateSeal](docs/assets/stateseal-trust-pipeline.svg)
-
-## Capacidades principais
-
-| Capacidade | Valor |
-| --- | --- |
-| Vínculo ao estado exato | Associa cada resultado à árvore de código que o produziu |
-| Verificação independente | Executa a política em um evaluator limpo sem confiar no autorrelato do Agent |
-| Recuperação de checkpoint | Preserva o último estado confiável quando um candidato posterior regride |
-| Admissão externa | O Broker decide com base em evidência, cobertura e política |
-| Recibos auditáveis | Registra proveniência, origem da evidência e risco residual |
-
-## Por quê
-
-Um Agent de longa duração pode passar nos testes, continuar editando, introduzir
-uma regressão e ainda informar sucesso. O StateSeal torna candidatos, evidências,
-checkpoints, recertificação e admissão estados explícitos do protocolo.
-
-```text
-WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
-                           ↘ REJECTED                 ↘ STALE / ABSTAINED
-```
-
-## Início rápido
-
-Instale a versão criada pelo GitHub Actions a partir de um Git tag determinado.
-O instalador seleciona a plataforma e verifica o checksum SHA-256.
+Ela nunca inicia, orienta, bloqueia, aprova ou aplica o trabalho do Agent. Não
+instala hooks, não atua como proxy do modelo e não altera prompts ou branches.
 
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+make install
 export PATH="$HOME/.local/bin:$PATH"
-seal version
-codex plugin marketplace add /path/to/stateseal
-codex plugin add stateseal@stateseal
+seal ui
 ```
 
-O Plugin inclui o Skill e o registro MCP e usa o StateSeal Core já instalado;
-não é necessário instalar o MCP separadamente. O primeiro comando apenas
-registra o checkout local no Codex: ele não publica nem envia código. Em uma
-nova tarefa do Codex, pedidos comuns de alteração ativam o StateSeal de forma
-automática e visível. O primeiro contrato do projeto e o Apply final exigem
-confirmação explícita. Sem o Plugin, use
-`seal run --repo /path/to/project "…"`.
+Cada afirmação é marcada como `Observed` (observada), `Derived` (correlação
+determinística) ou `Inferred` (hipótese de diagnóstico que pode estar errada).
 
-Para avaliação anônima ou checkout do código-fonte, execute `make install` com
-Git e Go 1.24 ou superior.
-
-O Runs Console mostra execuções de todos os repositórios, o DAG de proveniência,
-evidências do verificador, linha do tempo confiável, recuperação e recibos. A UI
-é somente leitura e escuta apenas no endereço de loopback.
-
-![Runs Console do StateSeal](docs/assets/stateseal-runs-console.svg)
-
-## Integrações e automação
-
-O StateSeal integra Codex Desktop, Codex CLI, Claude Code e Qoder. Outros agentes
-de terminal usam o mesmo protocolo com `seal run -- <command>`. Saída JSON,
-identificadores estáveis de regras e recibos apoiam CI e reprodução de pesquisa.
-
-## Limite de confiança
-
-`ADMITTED` significa apenas que o checkpoint exato atendeu à política em
-`seal.yaml`. Não prova que a especificação ou os testes estejam completos nem
-que o host seja íntegro.
-
-## Documentação
-
-- [Documentação em português](docs/pt-BR/index.md)
-- [Primeiros passos](docs/pt-BR/getting-started.md)
-- [Runs Console](docs/pt-BR/runs-console.md)
-- [Referência técnica em inglês](docs/index.md)
-
-Valores de protocolo, comandos, digest e logs permanecem em inglês para
-preservar o significado de auditoria.
+Consulte a [documentação em inglês](docs/index.md).

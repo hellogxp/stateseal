@@ -1,5 +1,8 @@
 # Reliability rule taxonomy
 
+> **Historical protocol reference.** These delivery-gate rules are not active
+> in the current observation-only product.
+
 StateSeal receipts and ledger decisions use stable rule IDs. The free-form
 `reason` remains diagnostic text; integrations should key policy and reporting
 on `rule_id`.

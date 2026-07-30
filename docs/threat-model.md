@@ -1,5 +1,8 @@
 # Threat model
 
+> **Historical managed-delivery research.** Current StateSeal is a local,
+> read-only observer and has no blocking, admission, Apply, or restore role.
+
 StateSeal separates reliability claims from security claims.
 
 It also separates safety from liveness. Rejecting or abstaining on every

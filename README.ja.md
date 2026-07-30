@@ -5,83 +5,20 @@
 [Português do Brasil](README.pt-BR.md) · [Deutsch](README.de.md) ·
 [Français](README.fr.md)
 
-StateSeal は、Coding Agent が生成した候補を、正確なコード状態に結び付けられ、
-独立して検証され、復旧・再認証・監査が可能な配信結果に変換します。検証範囲と
-残余リスクも明示します。
+StateSeal は Coding Agent 向けの**読み取り専用ランタイムインテリジェンス層**です。
+リクエスト、Skill、ツール、成果物、失敗、Agent が報告した結果をリアルタイムの
+全体図に再構成します。
 
-> モデルが変更を提案し、証拠が判断を支え、Broker が承認を決定し、Git が履歴を保存し、ユーザーが適用します。
-
-StateSeal は別の Coding Agent でも、テストの代替でもありません。既存の Agent と
-検証コマンドを包み、配信されるコードが検証済みコードと完全に一致することを保証します。
-
-![StateSeal の信頼済み配信パイプライン](docs/assets/stateseal-trust-pipeline.svg)
-
-## 主な機能
-
-| 機能 | 価値 |
-| --- | --- |
-| 正確な状態への結合 | 検証結果を、それを生成したコードツリーに結び付けます |
-| 独立検証 | クリーンな evaluator でポリシーを実行し、Agent の自己申告に依存しません |
-| チェックポイント復旧 | 後続候補が回帰しても、最後の信頼済み状態を保持します |
-| 外部承認 | Broker が証拠、範囲、ポリシーから最終判断を行います |
-| 監査可能なレシート | 来歴、証拠の出所、残余リスクを記録します |
-
-## 必要な理由
-
-長時間動作する Agent は、テスト合格後に編集を続けて回帰を導入しながら、成功を
-報告する可能性があります。StateSeal は候補、証拠、チェックポイント、再認証、
-承認を明示的なプロトコル状態として扱います。
-
-```text
-WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
-                           ↘ REJECTED                 ↘ STALE / ABSTAINED
-```
-
-## クイックスタート
-
-GitHub Actions が確定した Git tag から構築したリリースをインストールします。
-インストーラーはプラットフォームを選択し、SHA-256 を検証します。
+Agent の起動・誘導・停止・拒否・承認・Apply は行いません。Hook のインストール、
+モデル通信のプロキシ、Prompt やブランチの変更も行いません。
 
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+make install
 export PATH="$HOME/.local/bin:$PATH"
-seal version
-codex plugin marketplace add /path/to/stateseal
-codex plugin add stateseal@stateseal
+seal ui
 ```
 
-Plugin は Skill と MCP 登録を同梱し、インストール済みの StateSeal Core を
-使用します。MCP を別途インストールする必要はありません。最初のコマンドは
-ローカルのソース checkout を Codex に登録するだけで、公開やアップロードは
-行いません。新しい Codex タスクでは通常のコード変更要求が自動かつ可視的に
-StateSeal を起動し、最初のプロジェクト契約と最終 Apply は明示的に確認されます。
-Plugin を利用できない場合は `seal run --repo /path/to/project "…"` を使用します。
+表示する主張は `Observed`（直接観測）、`Derived`（決定的な関連付け）、
+`Inferred`（誤る可能性のある診断仮説）に分類されます。
 
-匿名レビューまたはソースチェックアウトでは、Git と Go 1.24 以降を用意して
-`make install` を実行できます。
-
-Runs Console では、全リポジトリの実行、状態来歴 DAG、検証証拠、信頼済みイベント、
-チェックポイント復旧、完了レシートを確認できます。UI は読み取り専用で、
-ループバックアドレスだけを使用します。
-
-![StateSeal Runs Console](docs/assets/stateseal-runs-console.svg)
-
-## 統合と自動化
-
-Codex Desktop、Codex CLI、Claude Code、Qoder 向けの統合を提供します。その他の
-ターミナル Agent も `seal run -- <command>` で同じプロトコルを利用できます。
-JSON 出力、安定したルール ID、完了レシートは CI や研究再現にも利用できます。
-
-## 信頼境界
-
-`ADMITTED` は、正確なチェックポイントが `seal.yaml` の検証ポリシーを満たしたこと
-だけを意味します。仕様やテストの完全性、ホストの安全性は証明しません。
-
-## ドキュメント
-
-- [日本語ドキュメント](docs/ja/index.md)
-- [はじめに](docs/ja/getting-started.md)
-- [Runs Console](docs/ja/runs-console.md)
-- [英語の技術リファレンス](docs/index.md)
-
-プロトコル値、コマンド、digest、ログは監査上の意味を保つため英語のまま表示されます。
+詳細は [English documentation](docs/index.md) を参照してください。

@@ -2,16 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/hellogxp/stateseal/internal/identity"
-	"github.com/hellogxp/stateseal/pkg/protocol"
 	"github.com/spf13/cobra"
 )
 
@@ -36,6 +33,25 @@ func adapterCmd() *cobra.Command {
 			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", row[0], row[1], row[2])
 		}
 	}})
+	return cmd
+}
+
+// inertAdapterCompatibilityCmd keeps lifecycle commands installed by older
+// StateSeal versions harmless after upgrade. It is hidden and exposes no
+// installer or managed-delivery behavior.
+func inertAdapterCompatibilityCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "adapter", Hidden: true}
+	for _, agent := range supportedAgents {
+		agentName := agent
+		agentCmd := &cobra.Command{Use: agentName, Hidden: true}
+		agentCmd.AddCommand(&cobra.Command{
+			Use: "hook [event]", Hidden: true, Args: cobra.MaximumNArgs(1),
+			RunE: func(c *cobra.Command, args []string) error {
+				return runAgentHook(agentName, c, args)
+			},
+		})
+		cmd.AddCommand(agentCmd)
+	}
 	return cmd
 }
 
@@ -96,61 +112,12 @@ func sealExecutable() (string, error) {
 }
 
 func runAgentHook(agent string, cmd *cobra.Command, args []string) error {
-	eventName := ""
-	if len(args) == 1 {
-		eventName = args[0]
-	}
-	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 1<<20))
-	if err != nil {
-		return agentHookMessage(agent, cmd, "StateSeal could not read the lifecycle event: "+err.Error(), false, eventName)
-	}
-	var event map[string]any
-	if len(strings.TrimSpace(string(raw))) > 0 {
-		if err := json.Unmarshal(raw, &event); err != nil {
-			return agentHookMessage(agent, cmd, "StateSeal received a malformed lifecycle event.", false, eventName)
-		}
-	}
-	if eventName == "" {
-		eventName, _ = event["hook_event_name"].(string)
-	}
-	if eventName == "" {
-		eventName, _ = event["event_name"].(string)
-	}
-	managedRuntime := os.Getenv("STATESEAL_SUBMIT_DIR") != "" || hydrateHookRuntime(event)
-	if !managedRuntime {
-		return neutralHookOutput(agent, cmd)
-	}
-	isTool, isStop := lifecycleEventKind(agent, eventName)
-	if agent == "qoder" && isStop {
-		if retry, _ := event["stop_hook_active"].(bool); retry {
-			// Qoder requires a previously blocked Stop retry to be released.
-			// The outer managed run remains authoritative and performs terminal
-			// recertification even when this lifecycle retry is released.
-			return neutralHookOutput(agent, cmd)
-		}
-	}
-	if isTool && !matchesVerifierCommand(hookCommand(event), os.Getenv("STATESEAL_ADAPTER_CHECKS")) {
-		return neutralHookOutput(agent, cmd)
-	}
-	if !isTool && !isStop {
-		return neutralHookOutput(agent, cmd)
-	}
-	receipt, err := requestSubmission()
-	if err != nil {
-		return agentHookMessage(agent, cmd, "StateSeal could not seal this candidate: "+err.Error(), false, eventName)
-	}
-	if receipt.Verdict == protocol.VerdictAdmitted {
-		return neutralHookOutput(agent, cmd)
-	}
-	message := fmt.Sprintf("StateSeal %s", receipt.Verdict)
-	if receipt.RuleID != "" {
-		message += " (" + receipt.RuleID + ")"
-	}
-	if receipt.Reason != "" {
-		message += ": " + receipt.Reason
-	}
-	blockStop := isStop && os.Getenv("STATESEAL_MODE") == "enforce" && receipt.RuleID != protocol.RuleCandidateBudgetExhausted && receipt.RuleID != protocol.RuleNoProgress
-	return agentHookMessage(agent, cmd, message, blockStop, eventName)
+	// Compatibility kill switch for integrations installed by older releases.
+	// StateSeal no longer consumes lifecycle events or returns context, denial,
+	// continuation, or blocking signals. Keeping this handler inert prevents a
+	// stale machine-level hook from affecting an Agent after upgrade.
+	_ = args
+	return neutralHookOutput(agent, cmd)
 }
 
 func writeHookRuntime(proposal, submitDir, mode, checks string) (func(), error) {
@@ -224,59 +191,10 @@ func neutralHookOutput(agent string, cmd *cobra.Command) error {
 }
 
 func agentHookMessage(agent string, cmd *cobra.Command, message string, block bool, event string) error {
-	var response map[string]any
-	switch agent {
-	case "codex":
-		response = map[string]any{"systemMessage": message}
-		if block {
-			// A blocking Stop decision is Codex's continuation signal: it
-			// creates a new prompt from the reason and keeps the Agent loop
-			// running. continue:false would take precedence and stop the turn.
-			response["decision"] = "block"
-			response["reason"] = message
-		} else if event == "PostToolUse" {
-			response["hookSpecificOutput"] = map[string]any{
-				"hookEventName":     event,
-				"additionalContext": message,
-			}
-		}
-	case "claude", "qoder":
-		if block {
-			response = map[string]any{"decision": "block", "reason": message}
-		} else {
-			response = map[string]any{"hookSpecificOutput": map[string]any{"hookEventName": event, "additionalContext": message}}
-		}
-	case "gemini":
-		if block {
-			response = map[string]any{"decision": "deny", "reason": message}
-		} else {
-			response = map[string]any{"hookSpecificOutput": map[string]any{"hookEventName": event, "additionalContext": message}}
-		}
-	case "cursor":
-		if block {
-			response = map[string]any{"followup_message": message}
-		} else {
-			response = map[string]any{"user_message": message}
-		}
-	case "copilot":
-		if block {
-			response = map[string]any{"decision": "block", "reason": message}
-		} else {
-			response = map[string]any{"additionalContext": message}
-		}
-	case "opencode":
-		return nil
-	}
-	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(response); err != nil {
-		return err
-	}
-	if agent == "qoder" && block {
-		// Qoder's IDE and CLI use exit 2 as the authoritative Stop-block
-		// signal. The JSON body remains useful to compatible surfaces, while
-		// stderr receives the same reason through the root error handler.
-		return codedError{2, errors.New(message)}
-	}
-	return nil
+	// Retained only for binary/source compatibility with older internal call
+	// sites. No message or decision may be injected into an Agent.
+	_, _, _ = message, block, event
+	return neutralHookOutput(agent, cmd)
 }
 
 func hookCommand(event map[string]any) string {

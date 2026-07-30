@@ -57,7 +57,8 @@ def main() -> None:
     )
     process.stdin.flush()
     listed = request(2, "tools/list", {})
-    names = {tool["name"] for tool in listed["result"]["tools"]}
+    tools = {tool["name"]: tool for tool in listed["result"]["tools"]}
+    names = set(tools)
     required = {
         "inspect_project",
         "enable_project",
@@ -67,6 +68,8 @@ def main() -> None:
         "reject_delivery",
     }
     assert required <= names, names
+    inspect_schema = tools["inspect_project"]["inputSchema"]
+    assert {"repo_path", "goal"} <= set(inspect_schema["properties"]), inspect_schema
 
     process.stdin.close()
     process.wait(timeout=5)

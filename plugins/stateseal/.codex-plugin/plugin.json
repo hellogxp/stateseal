@@ -1,7 +1,7 @@
 {
   "name": "stateseal",
-  "version": "0.1.1+codex.20260727134658",
-  "description": "Visible, transactional verified delivery for coding-agent changes",
+  "version": "0.1.1+codex.20260727142348",
+  "description": "Read-only runtime panorama and Skill attribution for coding agents",
   "author": {
     "name": "StateSeal Contributors",
     "url": "https://github.com/hellogxp/stateseal"
@@ -11,29 +11,27 @@
   "license": "Apache-2.0",
   "keywords": [
     "coding-agent",
-    "verified-delivery",
-    "mcp",
-    "git",
-    "checkpoint"
+    "observability",
+    "skill-attribution",
+    "runtime-intelligence",
+    "audit"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "StateSeal",
-    "shortDescription": "Verified delivery for coding-agent changes.",
-    "longDescription": "StateSeal visibly routes code-changing tasks through an isolated proposal, independent verification, a state-bound receipt, and explicit final Apply. Read-only work stays on the Agent's normal path, and StateSeal infrastructure failures degrade visibly without blocking ordinary development.",
-    "developerName": "StateSeal Contributors",
+    "shortDescription": "Read-only Agent runtime panorama and attribution.",
+    "longDescription": "StateSeal reconstructs Agent sessions, Skill usage, tool activity, artifacts, failures, and reported outcomes from local runtime signals. It never starts, steers, blocks, approves, or applies Agent work.",
+    "developerName": "xueping",
     "category": "Productivity",
     "capabilities": [
-      "Interactive",
-      "Write"
+      "Interactive"
     ],
     "websiteURL": "https://github.com/hellogxp/stateseal",
     "defaultPrompt": [
-      "Show StateSeal status for this workspace",
-      "Develop this change through verified delivery",
-      "Exclude this repository from StateSeal"
+      "Show the StateSeal runtime panorama",
+      "Explain which Skills and tools were observed",
+      "Diagnose this Agent session without changing it"
     ],
     "brandColor": "#2F6FEB"
-  },
-  "mcpServers": "./.mcp.json"
+  }
 }

@@ -23,6 +23,7 @@ import (
 )
 
 func TestInitCreatesActionablePolicy(t *testing.T) {
+	t.Skip("legacy managed-delivery command removed from the observation-only product")
 	root := t.TempDir()
 	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
 		t.Fatal(err)
@@ -204,6 +205,7 @@ func TestProjectSetupPreviewShowsExactVerificationContract(t *testing.T) {
 }
 
 func TestSetupCreatesProjectPolicyAndPreservesExistingHooks(t *testing.T) {
+	t.Skip("legacy Hook installer removed from the observation-only product")
 	root := t.TempDir()
 	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
 		t.Fatal(err)
@@ -310,6 +312,7 @@ func TestManagedCodexChildIgnoresOuterDesktopRouting(t *testing.T) {
 }
 
 func TestSingleGoalRunBootstrapsVerifiesAndApplies(t *testing.T) {
+	t.Skip("legacy Agent launcher removed from the observation-only product")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("LC_ALL", "zh_CN.UTF-8")
 	root := t.TempDir()
@@ -372,6 +375,7 @@ func TestSingleGoalRunBootstrapsVerifiesAndApplies(t *testing.T) {
 }
 
 func TestDevelopmentRunRejectsEmptyDeliverable(t *testing.T) {
+	t.Skip("legacy delivery gate removed from the observation-only product")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	root := t.TempDir()
 	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
@@ -551,6 +555,7 @@ func TestLifecycleEventMatrix(t *testing.T) {
 }
 
 func TestQoderStopBlockUsesOfficialExitCode(t *testing.T) {
+	t.Skip("blocking Hook output is intentionally retired")
 	cmd := &cobra.Command{}
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -704,6 +709,7 @@ func TestHookRuntimeRecoversContextWithoutInheritedEnvironment(t *testing.T) {
 }
 
 func TestCodexStopHookSubmitsThroughRecoveredRuntime(t *testing.T) {
+	t.Skip("legacy Hook submission is intentionally retired")
 	root := t.TempDir()
 	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
 		t.Fatal(err)
@@ -766,6 +772,7 @@ func TestCodexStopHookSubmitsThroughRecoveredRuntime(t *testing.T) {
 }
 
 func TestCodexRejectedStopRequestsAnotherAgentIteration(t *testing.T) {
+	t.Skip("Agent continuation signals are intentionally retired")
 	cmd := &cobra.Command{}
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -785,6 +792,7 @@ func TestCodexRejectedStopRequestsAnotherAgentIteration(t *testing.T) {
 }
 
 func TestCodexPostToolFeedbackUsesOfficialContextShape(t *testing.T) {
+	t.Skip("Agent context injection is intentionally retired")
 	cmd := &cobra.Command{}
 	var out bytes.Buffer
 	cmd.SetOut(&out)
@@ -802,6 +810,7 @@ func TestCodexPostToolFeedbackUsesOfficialContextShape(t *testing.T) {
 }
 
 func TestRunFailsBeforeStartingAgentWhenGitIdentityIsMissing(t *testing.T) {
+	t.Skip("legacy Agent launcher removed from the observation-only product")
 	root := t.TempDir()
 	if _, err := identity.Git(root, "init", "-b", "main"); err != nil {
 		t.Fatal(err)

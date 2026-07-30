@@ -1,5 +1,8 @@
 # Research and evidence boundary
 
+> **Historical research provenance.** It supports the accompanying paper and
+> does not define the current product's runtime authority.
+
 StateSeal is informed by empirical studies of iterative code repair and by
 adjacent open-source systems. Those inputs shape the problem decomposition;
 repository tests and compatibility evidence determine what this implementation

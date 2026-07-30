@@ -1,5 +1,8 @@
 # Agent adapters
 
+> **Historical research only.** The current StateSeal product does not install
+> Agent adapters or lifecycle hooks and does not participate in execution.
+
 StateSeal is agent-agnostic. The command adapter works with any coding agent
 that can be launched from a terminal:
 
@@ -80,9 +83,12 @@ verified checkpoint remains pending and the source branch remains unchanged.
 When a Desktop project is enabled, StateSeal commits both `seal.yaml` and the
 selected Agent's repository-local lifecycle integration. This connects the
 Plugin's semantic MCP routing to deterministic proposal tool/Stop boundaries.
-If a non-Git workspace contains multiple repositories, the MCP result lists
-them and requires an explicit selection; CLI users use `seal workspace list`
-and `seal run --repo`.
+If a non-Git workspace contains multiple repositories, Core automatically
+routes the complete goal from project names, tracked paths, and read-only code
+evidence and returns confidence plus evidence. On a genuine tie, the host Agent
+uses its current context and read-only search before asking a natural product
+question. Ordinary users are never asked for a Git path. `--repo` remains an
+optional deterministic override for CI and scripts.
 
 MCP routing is host-Agent mediated: the instructions distinguish code-changing
 work from explanation, search, planning, and review-only work, but MCP alone is

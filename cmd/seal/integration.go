@@ -132,12 +132,12 @@ func integrateCmd() *cobra.Command {
 			}
 			if spec.Kind == integrationKindMCP {
 				fmt.Fprintln(cmd.OutOrStdout(), integrationText(locale,
-					"Open a Git project and describe the development goal normally. The first task asks for one native project-enable approval.",
-					"在 Agent 中打开 Git 项目并正常描述开发目标；首次任务只会请求一次原生项目启用授权。"))
+					"Open any workspace and describe the development goal normally. StateSeal routes it to the relevant project; the first task asks for one native project-enable approval.",
+					"在 Agent 中打开任意 Workspace 并正常描述开发目标；StateSeal 会自动定位相关项目，首次任务只会请求一次原生项目启用授权。"))
 			} else {
 				fmt.Fprintln(cmd.OutOrStdout(), integrationText(locale,
-					"Run seal from a Git project. The first managed task asks you to confirm its verification contract.",
-					"请在 Git 项目中运行 seal；首次受控任务会要求确认项目验证合同。"))
+					"Run seal from any workspace. StateSeal routes the goal to the relevant project; the first managed task asks you to confirm its verification contract.",
+					"可在任意 Workspace 中运行 seal；StateSeal 会自动定位相关项目，首次受控任务会要求确认项目验证合同。"))
 			}
 			return nil
 		},

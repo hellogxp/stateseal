@@ -1,5 +1,8 @@
 # Verification model
 
+> **Historical research model.** This document is not a description of the
+> current observation-only product surface.
+
 StateSeal separates four questions that are often collapsed into “tests
 passed”:
 

@@ -4,90 +4,21 @@
 [한국어](README.ko.md) · [Español](README.es.md) ·
 [Português do Brasil](README.pt-BR.md) · **Deutsch** · [Français](README.fr.md)
 
-StateSeal verwandelt Kandidaten von Coding Agents in Ergebnisse, die an den
-exakten Codezustand gebunden, unabhängig verifiziert, wiederherstellbar,
-rezertifizierbar und auditierbar sind. Verifikationsumfang und Restrisiken
-werden ausdrücklich ausgewiesen.
+StateSeal ist eine **schreibgeschützte Runtime-Intelligence-Schicht** für
+Coding Agents. Anfragen, Skills, Werkzeuge, Artefakte, Fehler und vom Agent
+gemeldete Ergebnisse werden als Live-Panorama rekonstruiert.
 
-> Das Modell schlägt vor. Nachweise informieren. Der Broker entscheidet. Git erinnert. Der Benutzer wendet an.
-
-StateSeal ist weder ein weiterer Coding Agent noch ein Ersatz für Tests. Es
-umschließt den vorhandenen Agenten und die Prüfkommandos, damit ausgelieferter
-und verifizierter Code exakt übereinstimmen.
-
-![Vertrauenswürdige StateSeal-Auslieferung](docs/assets/stateseal-trust-pipeline.svg)
-
-## Kernfunktionen
-
-| Funktion | Nutzen |
-| --- | --- |
-| Bindung an den exakten Zustand | Ordnet jedes Prüfergebnis genau dem erzeugenden Codebaum zu |
-| Unabhängige Verifikation | Führt Richtlinien in einem sauberen Evaluator ohne Agent-Selbstauskunft aus |
-| Checkpoint-Wiederherstellung | Bewahrt den letzten vertrauenswürdigen Zustand trotz späterer Regression |
-| Externe Zulassung | Der Broker entscheidet anhand von Nachweisen, Abdeckung und Richtlinie |
-| Auditierbare Belege | Dokumentiert Herkunft, Nachweisquelle und Restrisiko |
-
-## Warum
-
-Ein lang laufender Agent kann Tests bestehen, weiter editieren, eine Regression
-einführen und trotzdem Erfolg melden. StateSeal macht Kandidaten, Nachweise,
-Prüfpunkte, Rezertifizierung und Zulassung zu expliziten Protokollzuständen.
-
-```text
-WORKING → CANDIDATE → VERIFYING → VERIFIED → RECERTIFYING → ADMITTED
-                           ↘ REJECTED                 ↘ STALE / ABSTAINED
-```
-
-## Schnellstart
-
-Installieren Sie das von GitHub Actions aus einem bestimmten Git-Tag gebaute
-Release. Das Installationsprogramm wählt die Plattform und prüft SHA-256.
+StateSeal startet, steuert, blockiert, genehmigt oder übernimmt keine
+Agent-Arbeit. Es installiert keine Hooks, vermittelt keinen Modellverkehr und
+ändert weder Prompts noch Branches.
 
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSL https://github.com/hellogxp/stateseal/releases/latest/download/install.sh | sh
+make install
 export PATH="$HOME/.local/bin:$PATH"
-seal version
-codex plugin marketplace add /path/to/stateseal
-codex plugin add stateseal@stateseal
+seal ui
 ```
 
-Das Plugin enthält Skill und MCP-Registrierung und verwendet den installierten
-StateSeal Core; MCP muss nicht separat installiert werden. Der erste Befehl
-registriert nur den lokalen Quellcode-Checkout in Codex und veröffentlicht oder
-lädt keinen Code hoch. In einer neuen Codex-Aufgabe aktivieren normale
-Codeänderungsanfragen StateSeal automatisch und sichtbar. Der erste
-Projektvertrag und das abschließende Apply erfordern eine ausdrückliche
-Bestätigung. Ohne Plugin verwenden Sie
-`seal run --repo /path/to/project "…"`.
+Jede Aussage wird als `Observed` (beobachtet), `Derived` (deterministisch
+abgeleitet) oder `Inferred` (möglicherweise falsche Diagnosehypothese) markiert.
 
-Für eine anonyme Begutachtung oder einen Quellcode-Checkout kann `make install`
-mit Git und Go 1.24 oder neuer verwendet werden.
-
-Die Runs Console zeigt repositoryübergreifende Läufe, den Herkunfts-DAG,
-Prüfnachweise, die vertrauenswürdige Zeitleiste, Wiederherstellung und Belege.
-Die UI ist schreibgeschützt und lauscht nur auf Loopback-Adressen.
-
-![StateSeal Runs Console](docs/assets/stateseal-runs-console.svg)
-
-## Integrationen und Automatisierung
-
-StateSeal integriert Codex Desktop, Codex CLI, Claude Code und Qoder. Andere
-Terminal-Agents nutzen dasselbe Protokoll über `seal run -- <command>`.
-JSON-Ausgabe, stabile Regel-IDs und Abschlussbelege unterstützen CI und
-reproduzierbare Forschung.
-
-## Vertrauensgrenze
-
-`ADMITTED` bedeutet nur, dass der exakte Prüfpunkt die Richtlinie in `seal.yaml`
-erfüllt hat. Es beweist weder die Vollständigkeit von Spezifikation oder Tests
-noch die Integrität des Hosts.
-
-## Dokumentation
-
-- [Deutsche Dokumentation](docs/de/index.md)
-- [Erste Schritte](docs/de/getting-started.md)
-- [Runs Console](docs/de/runs-console.md)
-- [Englische technische Referenz](docs/index.md)
-
-Protokollwerte, Befehle, Digests und Logs bleiben zur Wahrung der Auditsemantik
-im englischen Original.
+Siehe die [englische Dokumentation](docs/index.md).

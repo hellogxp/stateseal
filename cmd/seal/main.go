@@ -53,10 +53,25 @@ func (e staleStateError) Error() string { return e.reason }
 
 func newRoot() *cobra.Command {
 	info := buildinfo.Current()
-	cmd := &cobra.Command{Use: "seal", Short: "Transactional admission for coding-agent changes", SilenceUsage: true, SilenceErrors: true}
+	cmd := &cobra.Command{
+		Use:   "seal",
+		Short: "Read-only runtime intelligence for coding-agent delivery",
+		Long: "StateSeal observes coding-agent sessions and delivery evidence without " +
+			"starting, steering, blocking, approving, applying, or otherwise changing Agent execution.",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
 	cmd.Version = info.Version
 	cmd.SetVersionTemplate("seal {{.Version}}\n")
-	cmd.AddCommand(versionCmd(), installCmd(), integrateCmd(), workspaceCmd(), mcpCmd(), desktopCmd(), setupCmd(), initCmd(), verifyCmd(), runCmd(), submitCmd(), statusCmd(), timelineCmd(), diffCmd(), applyCmd(), explainCmd(), inspectCmd(), restoreCmd(), adapterCmd(), doctorCmd(), uiCmd())
+	// Product invariant: every default command is observational. Managed-agent
+	// execution, lifecycle hooks, admission, apply, restore, and MCP authority
+	// are intentionally not registered.
+	cmd.AddCommand(
+		versionCmd(),
+		workspaceCmd(),
+		uiCmd(),
+		inertAdapterCompatibilityCmd(),
+	)
 	return cmd
 }
 
