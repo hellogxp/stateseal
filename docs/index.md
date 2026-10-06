@@ -5,9 +5,9 @@
 [Português do Brasil](pt-BR/index.md) · [Deutsch](de/index.md) ·
 [Français](fr/index.md)
 
-StateSeal is a local, read-only runtime intelligence layer for coding agents.
-It observes Agent-owned session logs and local artifacts; it does not
-participate in execution.
+StateSeal is a local, read-only delivery intelligence layer for coding agents.
+It observes Agent-owned sessions, Git workspace metadata, checks, and local
+artifacts; it does not participate in execution.
 
 | Read this | When you need |
 | --- | --- |

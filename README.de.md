@@ -4,9 +4,9 @@
 [한국어](README.ko.md) · [Español](README.es.md) ·
 [Português do Brasil](README.pt-BR.md) · **Deutsch** · [Français](README.fr.md)
 
-StateSeal ist eine **schreibgeschützte Runtime-Intelligence-Schicht** für
-Coding Agents. Anfragen, Skills, Werkzeuge, Artefakte, Fehler und vom Agent
-gemeldete Ergebnisse werden als Live-Panorama rekonstruiert.
+StateSeal ist eine **schreibgeschützte Delivery-Intelligence-Schicht** für
+Coding Agents. Anfragen, beobachtete Codezustände, Prüfungen, Artefakte, Fehler
+und Abschlussmeldungen des Agent werden als Live-Panorama rekonstruiert.
 
 StateSeal startet, steuert, blockiert, genehmigt oder übernimmt keine
 Agent-Arbeit. Es installiert keine Hooks, vermittelt keinen Modellverkehr und

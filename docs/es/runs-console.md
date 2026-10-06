@@ -1,30 +1,12 @@
-# Runs Console
+# Panorama de entrega
 
-[English](../runs-console.md) | Español
+`seal ui` es una vista de solo lectura de las entregas locales del Agent. Muestra
+el estado actual del código, archivos cambiados, comprobaciones ligadas a cada
+estado, evidencia obsoleta, artefactos, diagnósticos y la línea de auditoría.
 
-![Runs Console de StateSeal](../assets/stateseal-runs-console.svg)
-
-`seal ui` es una vista local de solo lectura del estado de autoridad externo.
-
-```bash
-seal ui
-seal ui --no-open
-seal ui --address 127.0.0.1:9137
+```text
+Solicitud → estados de código observados → comprobaciones / artefactos → declaración del Agent
 ```
 
-La lista permite buscar y filtrar ejecuciones de todos los repositorios. El
-detalle incluye:
-
-- DAG de candidato, evidencia, punto de control, recuperación, decisión y aplicación;
-- ejecuciones del verificador vinculadas al estado exacto del código;
-- cronología con cadena hash validada;
-- recibo con verdict, rule, disposition y checkpoint.
-
-Los flujos simples comprimen las capas vacías. El texto largo queda limitado al
-nodo y se muestra completo en el tooltip y el Inspector.
-
-La UI admite ocho idiomas y detecta el idioma del navegador. Goal, valores del
-protocolo, ID, digest y logs conservan el texto original de auditoría.
-
-El servidor solo se vincula a loopback y no expone API de escritura. Si falla
-la continuidad hash, la cronología afectada no se presenta como confiable.
+`Observed` es un hecho directo, `Derived` una correlación reproducible e
+`Inferred` una hipótesis. No hay controles para bloquear, aprobar o aplicar trabajo.

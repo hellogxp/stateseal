@@ -3,3 +3,6 @@
 /.stateseal/
 *.out
 .DS_Store
+
+# Private working notes (never publish)
+/notes/

@@ -1,118 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
-  <title id="title">StateSeal Runs Console</title>
-  <desc id="desc">A product illustration of the local StateSeal console with a state provenance graph, trusted event timeline, verifier evidence, and completion receipt.</desc>
+  <title id="title">StateSeal delivery intelligence panorama</title>
+  <desc id="desc">A read-only delivery evidence graph connects a request, observed code states, checks, artifacts, and an Agent completion claim, with diagnostic findings and evidence freshness.</desc>
   <defs>
-    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#050c15"/>
-      <stop offset="1" stop-color="#0b1422"/>
-    </linearGradient>
-    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#101a29"/>
-      <stop offset="1" stop-color="#0c1522"/>
-    </linearGradient>
-    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5ca8ff"/>
-      <stop offset="1" stop-color="#6464ff"/>
-    </linearGradient>
-    <filter id="shadow2" x="-20%" y="-20%" width="140%" height="160%">
-      <feDropShadow dx="0" dy="14" stdDeviation="20" flood-color="#000" flood-opacity=".32"/>
-    </filter>
-    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0 0 8 4 0 8Z" fill="#31bd87"/>
-    </marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07111f"/><stop offset="1" stop-color="#0c1425"/></linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#142033"/><stop offset="1" stop-color="#101827"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000" flood-opacity=".32"/></filter>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#8da2c5" opacity=".12"/></pattern>
     <style>
-      .brand{font:700 24px Inter,ui-sans-serif,system-ui,sans-serif;fill:#f3f7fd}
-      .micro{font:600 12px Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:1.6px;fill:#718099}
-      .h1{font:700 26px Inter,ui-sans-serif,system-ui,sans-serif;fill:#edf2fa}
-      .h2{font:700 18px Inter,ui-sans-serif,system-ui,sans-serif;fill:#e9eef7}
-      .body{font:400 14px Inter,ui-sans-serif,system-ui,sans-serif;fill:#78879f}
-      .node{font:700 14px Inter,ui-sans-serif,system-ui,sans-serif;fill:#e9eef7}
-      .node2{font:400 12px Inter,ui-sans-serif,system-ui,sans-serif;fill:#77869d}
-      .good{font:700 12px Inter,ui-sans-serif,system-ui,sans-serif;fill:#48d6a4;letter-spacing:.8px}
+      .brand{font:700 28px Inter,system-ui,sans-serif;fill:#f4f7fb}.caps{font:700 14px Inter,system-ui,sans-serif;letter-spacing:2px;fill:#8fa0ba}.h1{font:700 34px Inter,system-ui,sans-serif;fill:#f8fafc}.h2{font:700 18px Inter,system-ui,sans-serif;fill:#edf3fb}.body{font:500 15px Inter,system-ui,sans-serif;fill:#9caec6}.small{font:600 13px Inter,system-ui,sans-serif;fill:#8ea0b9}.mono{font:600 13px ui-monospace,SFMono-Regular,monospace;fill:#aebbd0}.good{fill:#43d3a0}.warn{fill:#f6bd4b}.blueText{fill:#72a7ff}.line{stroke:#445873;stroke-width:2;fill:none}.flow{stroke:#58a6ff;stroke-width:3;fill:none}.dash{stroke-dasharray:8 8}.node{fill:url(#card);stroke:#2a3a52;stroke-width:1.5}.panel{fill:#0d1726;stroke:#24334a;stroke-width:1.5}.pill{fill:#15263a}.divider{stroke:#26364d;stroke-width:1}
     </style>
   </defs>
-
-  <rect width="1600" height="900" rx="28" fill="url(#bg2)"/>
-  <path d="M0 84H1600" stroke="#1d2a3b"/>
-  <path d="m58 31 20 10v22L58 75 38 63V41Z" fill="url(#brand)"/>
-  <path d="m58 42 9 5v10l-9 5-9-5V47Z" fill="#0b1524"/>
-  <text x="94" y="53" class="brand">StateSeal</text>
-  <text x="94" y="72" class="micro">LOCAL CONTROL PLANE</text>
-  <circle cx="1465" cy="52" r="6" fill="#48d6a4"/>
-  <text x="1480" y="57" class="body">Live</text>
-
-  <text x="72" y="132" class="micro">RUN · PAYMENT-SERVICE</text>
-  <text x="72" y="171" class="h1">Fix duplicate callbacks and preserve compatibility</text>
-  <rect x="1306" y="125" width="222" height="52" rx="16" fill="#11332d" stroke="#245d4c"/>
-  <text x="1340" y="157" class="good">ADMITTED · ALLOWED</text>
-
-  <!-- provenance -->
-  <g filter="url(#shadow2)">
-    <rect x="48" y="208" width="1504" height="340" rx="22" fill="url(#panel)" stroke="#223149"/>
+  <rect width="1600" height="900" rx="28" fill="url(#bg)"/>
+  <circle cx="1420" cy="85" r="250" fill="#183a72" opacity=".20"/>
+  <circle cx="110" cy="860" r="260" fill="#0d5962" opacity=".14"/>
+  <g transform="translate(70 56)">
+    <path d="M0 18 22 4l22 14v30L22 62 0 48Z" fill="url(#blue)"/><path d="m13 24 9-6 9 6v17l-9 6-9-6Z" fill="#091527"/>
+    <text x="60" y="31" class="brand">StateSeal</text><text x="60" y="54" class="caps">DELIVERY INTELLIGENCE · READ ONLY</text>
+    <circle cx="1375" cy="26" r="5" fill="#43d3a0"/><text x="1390" y="31" class="small">LIVE</text>
   </g>
-  <text x="74" y="244" class="h2">State provenance DAG</text>
-  <text x="74" y="267" class="body">Bound state, evidence, checkpoint, and admission decision.</text>
-  <circle cx="1334" cy="241" r="5" fill="#5d9dff"/><text x="1346" y="246" class="micro">ACTIVE</text>
-  <circle cx="1422" cy="241" r="5" fill="#48d6a4"/><text x="1434" y="246" class="micro">PASSED</text>
-  <rect x="72" y="288" width="1456" height="230" rx="16" fill="#07111d" stroke="#1a283b"/>
-  <g opacity=".22" fill="#69809f">
-    <circle cx="108" cy="324" r="1.4"/><circle cx="148" cy="324" r="1.4"/><circle cx="188" cy="324" r="1.4"/><circle cx="228" cy="324" r="1.4"/><circle cx="268" cy="324" r="1.4"/><circle cx="308" cy="324" r="1.4"/><circle cx="348" cy="324" r="1.4"/><circle cx="388" cy="324" r="1.4"/><circle cx="428" cy="324" r="1.4"/><circle cx="468" cy="324" r="1.4"/><circle cx="508" cy="324" r="1.4"/><circle cx="548" cy="324" r="1.4"/><circle cx="588" cy="324" r="1.4"/><circle cx="628" cy="324" r="1.4"/><circle cx="668" cy="324" r="1.4"/><circle cx="708" cy="324" r="1.4"/><circle cx="748" cy="324" r="1.4"/><circle cx="788" cy="324" r="1.4"/><circle cx="828" cy="324" r="1.4"/><circle cx="868" cy="324" r="1.4"/><circle cx="908" cy="324" r="1.4"/><circle cx="948" cy="324" r="1.4"/><circle cx="988" cy="324" r="1.4"/><circle cx="1028" cy="324" r="1.4"/><circle cx="1068" cy="324" r="1.4"/><circle cx="1108" cy="324" r="1.4"/><circle cx="1148" cy="324" r="1.4"/><circle cx="1188" cy="324" r="1.4"/><circle cx="1228" cy="324" r="1.4"/><circle cx="1268" cy="324" r="1.4"/><circle cx="1308" cy="324" r="1.4"/><circle cx="1348" cy="324" r="1.4"/><circle cx="1388" cy="324" r="1.4"/><circle cx="1428" cy="324" r="1.4"/><circle cx="1468" cy="324" r="1.4"/>
+  <g transform="translate(70 150)">
+    <text class="caps">AGENT DELIVERY PANORAMA</text>
+    <text y="52" class="h1">What changed, what supports it, and where evidence breaks.</text>
+    <text y="84" class="body">Facts, state-aware checks, artifacts, diagnostics, and audit—without controlling the Agent.</text>
   </g>
-
-  <path d="M330 405H382M624 405H676M918 405H970M1212 405H1264" stroke="#31bd87" stroke-width="2.5" marker-end="url(#arrow)"/>
-
-  <g>
-    <rect x="96" y="354" width="234" height="102" rx="15" fill="#111e30" stroke="#2a405e"/>
-    <rect x="96" y="354" width="5" height="102" rx="2" fill="#5d9dff"/>
-    <circle cx="128" cy="387" r="16" fill="#182d49"/><path d="M121 387h14M128 380v14" stroke="#6aa6ff" stroke-width="2"/>
-    <text x="154" y="388" class="node">Task intent</text><text x="120" y="423" class="node2">Fix duplicate callbacks…</text>
+  <g transform="translate(70 270)" filter="url(#shadow)">
+    <rect width="1460" height="370" rx="22" class="panel"/><rect x="16" y="72" width="1428" height="276" rx="16" fill="url(#grid)"/>
+    <text x="28" y="35" class="h2">Delivery evidence graph</text><text x="28" y="58" class="small">Request → code states → checks and artifacts → Agent completion claim</text>
+    <g transform="translate(48 145)">
+      <path d="M220 74H290M510 74H580M800 74H870M1090 74h70" class="flow"/>
+      <path d="M690 120v58h180" class="line dash"/><path d="M980 120v58h180" class="line dash"/>
+      <g><rect width="220" height="145" rx="16" class="node"/><rect width="5" height="145" rx="3" fill="#60a5fa"/><circle cx="34" cy="35" r="14" fill="#173457"/><path d="M28 35h12M34 29v12" stroke="#72a7ff" stroke-width="2"/><text x="58" y="31" class="caps blueText">REQUEST</text><text x="24" y="72" class="h2">Delivery goal</text><text x="24" y="99" class="body">Fix callback duplication</text><text x="24" y="124" class="small">Observed</text></g>
+      <g transform="translate(290)"><rect width="220" height="145" rx="16" class="node"/><rect width="5" height="145" rx="3" fill="#60a5fa"/><text x="24" y="33" class="caps blueText">CODE STATE S1</text><text x="24" y="72" class="h2">3 files changed</text><text x="24" y="99" class="mono">+42 / −16</text><text x="24" y="124" class="small">Derived from edit events</text></g>
+      <g transform="translate(580)"><rect width="220" height="145" rx="16" class="node"/><rect width="5" height="145" rx="3" fill="#43d3a0"/><text x="24" y="33" class="caps good">CHECK · S1</text><text x="24" y="72" class="h2">Test suite passed</text><text x="24" y="99" class="mono">go test ./...</text><text x="24" y="124" class="small">Current by sequence</text></g>
+      <g transform="translate(870)"><rect width="220" height="145" rx="16" class="node"/><rect width="5" height="145" rx="3" fill="#f6bd4b"/><text x="24" y="33" class="caps warn">CODE STATE S2</text><text x="24" y="72" class="h2">Later edit observed</text><text x="24" y="99" class="body">Evidence became stale</text><text x="24" y="124" class="small">Derived · inspect basis</text></g>
+      <g transform="translate(1160)"><rect width="220" height="145" rx="16" class="node"/><rect width="5" height="145" rx="3" fill="#f6bd4b"/><text x="24" y="33" class="caps warn">AGENT CLAIM</text><text x="24" y="72" class="h2">Reported complete</text><text x="24" y="99" class="body">Not an approval</text><text x="24" y="124" class="small">Observed</text></g>
+      <g transform="translate(710 174)"><rect width="160" height="56" rx="12" class="node"/><text x="18" y="24" class="small">report.pdf</text><text x="18" y="43" class="caps">ARTIFACT</text></g>
+      <g transform="translate(1000 174)"><rect width="160" height="56" rx="12" class="node"/><text x="18" y="24" class="small">No current check</text><text x="18" y="43" class="caps warn">FINDING</text></g>
+    </g>
   </g>
-  <g>
-    <rect x="390" y="354" width="234" height="102" rx="15" fill="#111e30" stroke="#27503f"/>
-    <rect x="390" y="354" width="5" height="102" rx="2" fill="#48d6a4"/>
-    <circle cx="422" cy="387" r="16" fill="#14352f"/><path d="m415 387 5 5 9-12" fill="none" stroke="#48d6a4" stroke-width="2"/>
-    <text x="448" y="388" class="node">Candidate</text><text x="414" y="423" class="node2">cand_3c0…c2cc</text>
+  <g transform="translate(70 674)">
+    <g><rect width="455" height="160" rx="18" class="panel"/><text x="24" y="34" class="caps">CURRENT STATE</text><text x="24" y="75" class="h2">a3fe9e0 + dirty</text><text x="24" y="105" class="body">3 changed files · branch main</text><line x1="24" x2="431" y1="125" y2="125" class="divider"/><text x="24" y="148" class="small">Read-only Git metadata</text></g>
+    <g transform="translate(478)"><rect width="500" height="160" rx="18" class="panel"/><text x="24" y="34" class="caps warn">DIAGNOSTIC FINDING · DERIVED</text><text x="24" y="75" class="h2">Final observed state has no current check</text><text x="24" y="105" class="body">The workspace changed after the last recognized check.</text><line x1="24" x2="476" y1="125" y2="125" class="divider"/><text x="24" y="148" class="small">Basis: latest change follows every recognized check</text></g>
+    <g transform="translate(1001)"><rect width="459" height="160" rx="18" class="panel"/><text x="24" y="34" class="caps">EVIDENCE DISCIPLINE</text><circle cx="32" cy="69" r="5" fill="#43d3a0"/><text x="48" y="74" class="body">Observed facts</text><circle cx="32" cy="101" r="5" fill="#f6bd4b"/><text x="48" y="106" class="body">Reproducible derivations</text><circle cx="32" cy="133" r="5" fill="#818cf8"/><text x="48" y="138" class="body">Explicitly labeled inference</text></g>
   </g>
-  <g>
-    <rect x="684" y="354" width="234" height="102" rx="15" fill="#111e30" stroke="#27503f"/>
-    <rect x="684" y="354" width="5" height="102" rx="2" fill="#48d6a4"/>
-    <circle cx="716" cy="387" r="16" fill="#14352f"/><path d="m709 387 5 5 9-12" fill="none" stroke="#48d6a4" stroke-width="2"/>
-    <text x="742" y="388" class="node">Verifier evidence</text><text x="708" y="423" class="node2">cli · PASSED · 19ms</text>
-  </g>
-  <g>
-    <rect x="978" y="354" width="234" height="102" rx="15" fill="#111e30" stroke="#27503f"/>
-    <rect x="978" y="354" width="5" height="102" rx="2" fill="#48d6a4"/>
-    <circle cx="1010" cy="387" r="16" fill="#14352f"/><path d="M1010 376 1020 381v8c0 7-5 12-10 15-6-3-10-8-10-15v-8Z" fill="none" stroke="#48d6a4" stroke-width="1.8"/>
-    <text x="1036" y="388" class="node">Verified checkpoint</text><text x="1002" y="423" class="node2">cp_6951a…f7a9</text>
-  </g>
-  <g>
-    <rect x="1272" y="354" width="230" height="102" rx="15" fill="#111e30" stroke="#27503f"/>
-    <rect x="1272" y="354" width="5" height="102" rx="2" fill="#48d6a4"/>
-    <circle cx="1304" cy="387" r="16" fill="#14352f"/><path d="m1297 387 5 5 9-12" fill="none" stroke="#48d6a4" stroke-width="2"/>
-    <text x="1330" y="388" class="node">ADMITTED</text><text x="1296" y="423" class="node2">ALLOWED</text>
-  </g>
-
-  <!-- lower cards -->
-  <g filter="url(#shadow2)">
-    <rect x="48" y="578" width="904" height="274" rx="22" fill="url(#panel)" stroke="#223149"/>
-    <rect x="976" y="578" width="576" height="126" rx="22" fill="url(#panel)" stroke="#223149"/>
-    <rect x="976" y="726" width="576" height="126" rx="22" fill="url(#panel)" stroke="#223149"/>
-  </g>
-  <text x="74" y="616" class="h2">Trusted event timeline</text>
-  <text x="74" y="639" class="body">Append-only ledger with verified hash continuity.</text>
-  <path d="M110 680V810" stroke="#263a54" stroke-width="2"/>
-  <circle cx="110" cy="688" r="6" fill="#5d9dff"/><text x="138" y="693" class="node">TASK CREATED</text><text x="348" y="693" class="node2">17:03:59</text>
-  <circle cx="110" cy="728" r="6" fill="#5d9dff"/><text x="138" y="733" class="node">CANDIDATE SUBMITTED</text><text x="348" y="733" class="node2">tree sha256 · 0fc36b…</text>
-  <circle cx="110" cy="768" r="6" fill="#48d6a4"/><text x="138" y="773" class="node">CHECKPOINT VERIFIED</text><text x="348" y="773" class="node2">cp_6951a…f7a9</text>
-  <circle cx="110" cy="808" r="6" fill="#48d6a4"/><text x="138" y="813" class="node">COMPLETION ADMITTED</text><text x="348" y="813" class="node2">receipt · e84b14…</text>
-
-  <text x="1002" y="616" class="h2">Verifier evidence</text>
-  <text x="1002" y="639" class="body">Fresh execution bound to exact code state.</text>
-  <rect x="1002" y="658" width="524" height="28" rx="9" fill="#101d2d" stroke="#24364e"/>
-  <text x="1018" y="677" class="node">cli</text><text x="1090" y="677" class="node2">Verification · 19ms</text><text x="1452" y="677" class="good">PASSED</text>
-
-  <text x="1002" y="764" class="h2">Completion receipt</text>
-  <text x="1002" y="787" class="body">Cryptographic decision artifact.</text>
-  <text x="1002" y="821" class="micro">VERDICT</text><text x="1088" y="821" class="good">ADMITTED</text>
-  <text x="1260" y="821" class="micro">DISPOSITION</text><text x="1380" y="821" class="good">ALLOWED</text>
 </svg>

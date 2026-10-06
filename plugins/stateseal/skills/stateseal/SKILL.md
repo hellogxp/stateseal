@@ -1,9 +1,9 @@
 ---
 name: stateseal
-description: Inspect StateSeal's read-only Agent runtime panorama, Skill attribution, diagnostics, and audit data. Use only when the user explicitly asks for StateSeal, Agent session observability, Skill attribution, runtime diagnosis, or audit. Never trigger for ordinary coding work.
+description: Inspect StateSeal's read-only Agent delivery panorama, code-state evidence, check freshness, diagnostics, artifacts, and audit data. Use only when the user explicitly asks to inspect StateSeal or Agent delivery evidence. Never trigger for ordinary coding work and never control Agent execution.
 ---
 
-# StateSeal runtime intelligence
+# StateSeal delivery intelligence
 
 StateSeal is an optional, read-only observability surface. It must never become
 part of the Agent's execution or delivery decision.
@@ -22,11 +22,11 @@ part of the Agent's execution or delivery decision.
 
 Use the local read-only UI or observational CLI to summarize:
 
-- session timing and tool sequence;
-- observed Skill resource loads;
-- derived Skill-to-tool attribution;
-- reported failures and diagnostic hypotheses;
-- artifacts and file changes when present in the source transcript.
+- the current observed workspace state and code delta;
+- checks bound to observed code revisions and their freshness;
+- reported failures, evidence gaps, and diagnostic hypotheses;
+- observed file changes and delivery artifacts;
+- the sanitized audit timeline when more detail is needed.
 
 Always label claims as:
 

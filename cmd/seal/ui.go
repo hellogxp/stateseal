@@ -21,7 +21,7 @@ func uiCmd() *cobra.Command {
 	var noOpen bool
 	cmd := &cobra.Command{
 		Use:   "ui",
-		Short: "Open the read-only Agent runtime panorama",
+		Short: "Open the read-only Agent delivery panorama",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := validateLoopbackAddress(address); err != nil {
@@ -48,7 +48,7 @@ func uiCmd() *cobra.Command {
 				}
 			}()
 			url := "http://" + listener.Addr().String()
-			fmt.Fprintf(cmd.OutOrStdout(), "StateSeal Runtime Intelligence: %s\nPassive local observation · no Agent intervention · Ctrl+C to stop\n", url)
+			fmt.Fprintf(cmd.OutOrStdout(), "StateSeal Delivery Intelligence: %s\nPassive local observation · no Agent intervention · Ctrl+C to stop\n", url)
 			if !noOpen {
 				if err := openBrowser(url); err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "Could not open a browser automatically: %v\n", err)

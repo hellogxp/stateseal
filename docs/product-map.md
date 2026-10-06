@@ -2,43 +2,52 @@
 
 ## Positioning
 
-StateSeal is the runtime intelligence plane between fragmented Agent telemetry
-and developer understanding. It is not an Agent gateway or delivery gate.
+StateSeal is a local delivery-intelligence plane between fragmented Agent
+telemetry and developer understanding. It is not an Agent gateway, runner, or
+delivery gate.
 
 ```mermaid
 flowchart TB
   subgraph Sources
-    S1["Skill files"]
-    S2["Agent session logs"]
-    S3["Tool results"]
-    S4["Local artifacts / Git metadata"]
+    S1["Agent session logs"]
+    S2["Git workspace metadata"]
+    S3["Check results"]
+    S4["Local delivery artifacts"]
   end
-  Sources --> I["Local ingestion"]
-  I --> N["Unified event model"]
-  N --> A["Attribution engine"]
-  A --> P["Live panorama"]
-  A --> X["Diagnosis"]
-  A --> U["Audit export"]
+  Sources --> I["Read-only local ingestion"]
+  I --> N["Unified delivery event model"]
+  N --> C["Code-state and evidence correlation"]
+  C --> P["Delivery panorama"]
+  C --> D["Diagnosis"]
+  C --> A["Audit timeline / export"]
 ```
 
-## Modules
+## Core modules
 
 | Module | Responsibility | Product boundary |
 | --- | --- | --- |
-| Source adapters | Read Agent-owned files | Never write Agent configuration |
-| Normalizer | Convert versioned schemas | Preserve source and confidence |
-| Attribution | Correlate Skill, tool, artifact, and outcome | Label inference explicitly |
-| Panorama | Session list, DAG, timeline | Read-only GET APIs |
-| Diagnostics | Surface failure clusters and missing signals | Advice only |
-| Audit export | Produce portable summaries | No delivery authority |
+| Source adapters | Read Agent-owned logs and local metadata | Never install or write Agent configuration |
+| Normalizer | Convert versioned sources to stable delivery events | Preserve source and uncertainty |
+| State correlator | Relate edits, checks, artifacts, and completion claims | Never claim unobserved causality |
+| Evidence engine | Compute current, failed, stale, gap, or unknown posture | Not a semantic-correctness oracle |
+| Diagnostics | Explain failures and missing evidence with a reproducible basis | Advice and audit only |
+| Panorama | Search, graph, findings, checks, artifacts, timeline | GET-only local APIs |
+
+## Product principles
+
+1. **Outcome first, tools second.** Developers see delivery state before tool noise.
+2. **State-aware evidence.** A check result belongs to the code state it evaluated.
+3. **Facts before inference.** Every statement carries an evidence grade and basis.
+4. **Zero intervention.** No hook, proxy, Agent launcher, approval, block, or writeback.
+5. **Local and privacy-first.** Sanitize before display; export only on explicit user action.
 
 ## Roadmap
 
-1. Harden Codex transcript compatibility and incremental indexing.
-2. Add Claude Code and OpenCode read-only adapters.
-3. Add artifact/file-change correlation and privacy controls.
-4. Add latency, failure, Skill adoption, and value dashboards.
-5. Add portable OpenTelemetry-style export without proxying Agent traffic.
+1. Harden Codex compatibility and incremental indexing.
+2. Add read-only Claude Code and OpenCode adapters.
+3. Correlate standard test reports, SARIF, coverage, and CI run URLs.
+4. Add cross-session trends: repeated failure areas, stale-evidence rate, verification latency.
+5. Add portable JSON/SARIF/OpenTelemetry-style exports without proxying model traffic.
 
-Managed Agent execution, blocking, admission, and Apply are explicitly outside
-the roadmap.
+Intervention, delivery authority, policy enforcement, and Agent orchestration are
+explicitly outside the roadmap.

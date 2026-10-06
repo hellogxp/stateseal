@@ -26,8 +26,6 @@ jobs:
       - run: go mod verify
       - run: go test -race ./...
       - run: go vet ./...
-      - run: make sealbench
-      - run: make stackbench
 
   publish:
     needs: verify

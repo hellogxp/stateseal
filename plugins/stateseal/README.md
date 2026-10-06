@@ -1,7 +1,7 @@
 # StateSeal Plugin
 
 This optional Plugin teaches Codex how to explain StateSeal's local, read-only
-runtime panorama when the user explicitly asks for it.
+delivery panorama when the user explicitly asks for it.
 
 It does not register a delivery-control MCP server, auto-route coding tasks,
 install lifecycle hooks, launch workers, block execution, request approval, or

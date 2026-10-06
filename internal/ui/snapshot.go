@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,24 +13,83 @@ import (
 )
 
 type RunSummary struct {
-	ID                  string    `json:"id"`
-	TaskID              string    `json:"task_id"`
-	Goal                string    `json:"goal"`
-	Repository          string    `json:"repository"`
-	RepositoryRoot      string    `json:"repository_root"`
-	Status              string    `json:"status"`
-	Mode                string    `json:"mode"`
-	Disposition         string    `json:"disposition,omitempty"`
-	RuleID              string    `json:"rule_id,omitempty"`
-	UpdatedAt           time.Time `json:"updated_at"`
-	StartedAt           time.Time `json:"started_at,omitempty"`
-	CandidatesEvaluated int       `json:"candidates_evaluated"`
-	CandidatesRejected  int       `json:"candidates_rejected"`
-	CheckpointsVerified int       `json:"checkpoints_verified"`
-	EvidenceCount       int       `json:"evidence_count"`
-	Applied             bool      `json:"applied"`
-	Recovered           bool      `json:"recovered"`
-	IntegrityError      string    `json:"integrity_error,omitempty"`
+	ID                    string    `json:"id"`
+	TaskID                string    `json:"task_id"`
+	Goal                  string    `json:"goal"`
+	Repository            string    `json:"repository"`
+	RepositoryRoot        string    `json:"repository_root"`
+	Branch                string    `json:"branch,omitempty"`
+	Agent                 string    `json:"agent"`
+	Status                string    `json:"status"`
+	EvidencePosture       string    `json:"evidence_posture"`
+	Mode                  string    `json:"mode"`
+	UpdatedAt             time.Time `json:"updated_at"`
+	StartedAt             time.Time `json:"started_at,omitempty"`
+	AgentReportedComplete bool      `json:"agent_reported_complete"`
+	ToolCalls             int       `json:"tool_calls"`
+	ToolFailures          int       `json:"tool_failures"`
+	MutationEvents        int       `json:"mutation_events"`
+	ChangedFiles          int       `json:"changed_files"`
+	Additions             int       `json:"additions"`
+	Deletions             int       `json:"deletions"`
+	ChecksTotal           int       `json:"checks_total"`
+	ChecksPassed          int       `json:"checks_passed"`
+	ChecksFailed          int       `json:"checks_failed"`
+	ChecksStale           int       `json:"checks_stale"`
+	ArtifactsCount        int       `json:"artifacts_count"`
+	FindingsCount         int       `json:"findings_count"`
+	CurrentState          string    `json:"current_state,omitempty"`
+	WorkspaceDirty        bool      `json:"workspace_dirty"`
+	IntegrityError        string    `json:"integrity_error,omitempty"`
+}
+
+type ChangeRecord struct {
+	ID            string    `json:"id"`
+	Path          string    `json:"path"`
+	Operation     string    `json:"operation"`
+	StateRevision int       `json:"state_revision"`
+	Timestamp     time.Time `json:"timestamp"`
+	Source        string    `json:"source"`
+	EvidenceGrade string    `json:"evidence_grade"`
+}
+
+type CheckRecord struct {
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	Category         string    `json:"category"`
+	Command          string    `json:"command"`
+	WorkingDirectory string    `json:"working_directory,omitempty"`
+	Status           string    `json:"status"`
+	Freshness        string    `json:"freshness"`
+	StateRevision    int       `json:"state_revision"`
+	StartedAt        time.Time `json:"started_at"`
+	FinishedAt       time.Time `json:"finished_at,omitempty"`
+	DurationMS       int64     `json:"duration_ms,omitempty"`
+	ExitCode         int       `json:"exit_code,omitempty"`
+	ExitCodeObserved bool      `json:"exit_code_observed"`
+	Output           string    `json:"output,omitempty"`
+	Source           string    `json:"source"`
+	EvidenceGrade    string    `json:"evidence_grade"`
+}
+
+type ArtifactRecord struct {
+	ID            string    `json:"id"`
+	Path          string    `json:"path"`
+	Kind          string    `json:"kind"`
+	Timestamp     time.Time `json:"timestamp"`
+	Source        string    `json:"source"`
+	EvidenceGrade string    `json:"evidence_grade"`
+}
+
+type Finding struct {
+	ID            string    `json:"id"`
+	Code          string    `json:"code"`
+	Severity      string    `json:"severity"`
+	Title         string    `json:"title"`
+	Detail        string    `json:"detail"`
+	Basis         string    `json:"basis"`
+	EvidenceGrade string    `json:"evidence_grade"`
+	Timestamp     time.Time `json:"timestamp,omitempty"`
 }
 
 type GraphNode struct {
@@ -51,12 +111,16 @@ type GraphEdge struct {
 }
 
 type RunSnapshot struct {
-	Summary  RunSummary                  `json:"summary"`
-	Nodes    []GraphNode                 `json:"nodes"`
-	Edges    []GraphEdge                 `json:"edges"`
-	Events   []protocol.Event            `json:"events"`
-	Evidence []protocol.EvidenceEnvelope `json:"evidence"`
-	Receipt  *protocol.CompletionReceipt `json:"receipt,omitempty"`
+	Summary   RunSummary                  `json:"summary"`
+	Nodes     []GraphNode                 `json:"nodes"`
+	Edges     []GraphEdge                 `json:"edges"`
+	Events    []protocol.Event            `json:"events"`
+	Changes   []ChangeRecord              `json:"changes"`
+	Checks    []CheckRecord               `json:"checks"`
+	Artifacts []ArtifactRecord            `json:"artifacts"`
+	Findings  []Finding                   `json:"findings"`
+	Evidence  []protocol.EvidenceEnvelope `json:"evidence"`
+	Receipt   *protocol.CompletionReceipt `json:"receipt,omitempty"`
 }
 
 func LoadSnapshots() ([]RunSnapshot, error) {
@@ -67,28 +131,26 @@ func LoadSnapshots() ([]RunSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	tasks, err := store.ListTasks()
-	if err != nil {
-		if len(passive) > 0 {
-			return passive, nil
+	snapshots := append([]RunSnapshot(nil), passive...)
+	// Legacy admission records are deliberately excluded from the supported
+	// runtime view. They can be inspected explicitly for research archaeology,
+	// but are never mixed with passive delivery observations.
+	if os.Getenv("STATESEAL_INCLUDE_LEGACY") == "1" || os.Getenv("STATESEAL_UI_SOURCE") == "legacy" {
+		tasks, listErr := store.ListTasks()
+		if listErr != nil {
+			if len(snapshots) > 0 {
+				return snapshots, nil
+			}
+			return nil, listErr
 		}
-		return nil, err
-	}
-	snapshots := make([]RunSnapshot, 0, len(passive)+len(tasks))
-	snapshots = append(snapshots, passive...)
-	for _, task := range tasks {
-		legacy := project(task)
-		legacy.Summary.Mode = "legacy evidence archive"
-		legacy.Summary.Disposition = "historical record"
-		switch legacy.Summary.Status {
-		case "WORKING", "VERIFYING", "VERIFIED":
-			legacy.Summary.Status = "ACTIVE"
-		case "REJECTED", "ABSTAINED", "STALE", "ESCALATED":
-			legacy.Summary.Status = "ATTENTION"
-		default:
-			legacy.Summary.Status = "COMPLETED"
+		for _, task := range tasks {
+			legacy := project(task)
+			legacy.Summary.Mode = "historical research archive"
+			legacy.Summary.Agent = "legacy StateSeal prototype"
+			legacy.Summary.Status = "ARCHIVED"
+			legacy.Summary.EvidencePosture = "HISTORICAL"
+			snapshots = append(snapshots, legacy)
 		}
-		snapshots = append(snapshots, legacy)
 	}
 	sort.Slice(snapshots, func(i, j int) bool {
 		return snapshots[i].Summary.UpdatedAt.After(snapshots[j].Summary.UpdatedAt)
@@ -99,34 +161,27 @@ func LoadSnapshots() ([]RunSnapshot, error) {
 func project(task store.StoredTask) RunSnapshot {
 	state := task.State
 	summary := RunSummary{
-		ID:                  task.RepositoryID + "." + state.TaskID,
-		TaskID:              state.TaskID,
-		Goal:                state.Goal,
-		Repository:          filepath.Base(state.RepoRoot),
-		RepositoryRoot:      state.RepoRoot,
-		Status:              state.Status,
-		Mode:                state.Mode,
-		Disposition:         state.Disposition,
-		RuleID:              state.RuleID,
-		UpdatedAt:           state.UpdatedAt,
-		CandidatesEvaluated: state.CandidatesEvaluated,
-		CandidatesRejected:  state.CandidatesRejected,
-		CheckpointsVerified: state.CheckpointsVerified,
-		EvidenceCount:       len(state.Evidence),
-		Applied:             !state.AppliedAt.IsZero(),
-		IntegrityError:      task.IntegrityError,
+		ID:              task.RepositoryID + "." + state.TaskID,
+		TaskID:          state.TaskID,
+		Goal:            state.Goal,
+		Repository:      filepath.Base(state.RepoRoot),
+		RepositoryRoot:  state.RepoRoot,
+		Agent:           "legacy StateSeal prototype",
+		Status:          "ARCHIVED",
+		EvidencePosture: "HISTORICAL",
+		Mode:            "historical research archive",
+		UpdatedAt:       state.UpdatedAt,
+		ToolCalls:       state.CandidatesEvaluated,
+		ChecksTotal:     len(state.Evidence),
+		ChecksPassed:    state.CheckpointsVerified,
+		FindingsCount:   state.CandidatesRejected,
+		IntegrityError:  task.IntegrityError,
 	}
 	if summary.Goal == "" {
 		summary.Goal = state.TaskID
 	}
 	if summary.Repository == "." || summary.Repository == string(filepath.Separator) || summary.Repository == "" {
 		summary.Repository = "repository"
-	}
-	if summary.Applied {
-		summary.Status = "APPLIED"
-	}
-	if state.Receipt != nil {
-		summary.Recovered = state.Receipt.Recovered
 	}
 	if len(task.Events) > 0 {
 		summary.StartedAt = task.Events[0].Timestamp

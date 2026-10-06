@@ -5,9 +5,9 @@
 [Português do Brasil](README.pt-BR.md) · [Deutsch](README.de.md) ·
 [Français](README.fr.md)
 
-StateSeal은 Coding Agent를 위한 **읽기 전용 런타임 인텔리전스 계층**입니다.
-요청, Skill, 도구, 산출물, 실패 및 Agent가 보고한 결과를 실시간 파노라마로
-재구성합니다.
+StateSeal은 Coding Agent를 위한 **읽기 전용 전달 인텔리전스 계층**입니다.
+요청, 관측된 코드 상태, 검사, 산출물, 실패 및 Agent의 완료 보고를 실시간
+파노라마로 재구성합니다.
 
 Agent를 시작하거나 제어하거나 차단하거나 승인하거나 Apply하지 않습니다. Hook을
 설치하지 않고 모델 트래픽을 프록시하지 않으며 Prompt나 브랜치를 변경하지 않습니다.

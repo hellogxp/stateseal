@@ -59,7 +59,7 @@ func TestRunsAPIProjectsTrustedStateAndGraph(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &summaries); err != nil {
 		t.Fatal(err)
 	}
-	if len(summaries) != 1 || summaries[0].Repository != "payments" || summaries[0].EvidenceCount != 1 {
+	if len(summaries) != 1 || summaries[0].Repository != "payments" || summaries[0].ChecksTotal != 1 || summaries[0].Status != "ARCHIVED" || summaries[0].EvidencePosture != "HISTORICAL" {
 		t.Fatalf("unexpected summaries: %+v", summaries)
 	}
 
@@ -126,7 +126,7 @@ func TestStaticConsoleIsEmbedded(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "StateSeal Runtime Intelligence") {
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "StateSeal Delivery Intelligence") {
 		t.Fatalf("embedded console unavailable: %d %s", recorder.Code, recorder.Body.String())
 	}
 	recorder = httptest.NewRecorder()

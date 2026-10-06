@@ -5,10 +5,10 @@
 [Português do Brasil](README.pt-BR.md) · [Deutsch](README.de.md) ·
 [Français](README.fr.md)
 
-StateSeal is a **read-only runtime intelligence layer for coding agents**. It
-reconstructs what happened across a delivery session—requests, Skills, tools,
-artifacts, failures, and reported outcomes—without starting, steering,
-blocking, approving, or applying Agent work.
+StateSeal is a **read-only delivery intelligence layer for coding agents**. It
+reconstructs the delivery chain—request, observed code states, checks,
+artifacts, failures, and the Agent's completion claim—without participating in
+Agent execution.
 
 > Observe the execution. Explain the chain. Never become the execution.
 
@@ -16,30 +16,31 @@ blocking, approving, or applying Agent work.
 
 ## Why
 
-Agent transcripts contain valuable operational evidence, but it is fragmented
-across messages, tool calls, files, test output, and sub-agents. Developers
-need answers to practical questions:
+Agent transcripts contain useful delivery evidence, but it is fragmented
+across messages, file edits, Git state, checks, tool results, and artifacts.
+Developers need answers to practical questions:
 
-- Was the expected Skill discovered and actually used?
-- Which tools ran, in what order, and which ones failed?
-- What files and artifacts were produced?
+- What code state did the Agent actually leave behind?
+- Which files changed, and which artifacts were produced?
+- Which checks ran on the current state, and which became stale after later edits?
+- Did a current-state check fail, or did the Agent finish without observable checks?
 - Which facts are observed, which attributions are derived, and which
   conclusions are only inferred?
 - Where did time go, and where should a failed run be debugged?
 
-StateSeal turns those signals into a searchable session list, event timeline,
-and attribution DAG.
+StateSeal turns those signals into a searchable delivery list, evidence graph,
+diagnostic findings, and an audit timeline.
 
 ## Product invariant
 
 StateSeal is observational infrastructure:
 
 ```text
-Agent-owned session logs + local artifacts
-                    ↓  read only
-        normalization and correlation
-                    ↓
-   panorama · attribution · diagnosis · audit
+Agent-owned session logs + Git metadata + local artifacts
+                         ↓  read only
+           normalization and state correlation
+                         ↓
+     panorama · evidence · diagnosis · audit
 ```
 
 It does **not** install lifecycle hooks, proxy model traffic, launch an Agent,
@@ -74,8 +75,9 @@ seal ui
 ```
 
 The UI listens only on a loopback address and passively discovers supported
-local Codex session transcripts. It refreshes while the Agent runs. Raw tool
-arguments and outputs are not exposed by default.
+local Codex session transcripts. It refreshes while the Agent runs. StateSeal
+does not install an integration. Raw generic tool arguments are hidden and
+common secret patterns are redacted.
 
 Useful options:
 
@@ -88,8 +90,11 @@ seal workspace list /path/to/workspace
 ## Current scope
 
 - passive Codex JSONL session discovery;
-- live all-session overview;
-- request → Skill → tool → observed-outcome DAG;
+- live all-session delivery overview;
+- request → observed code states → checks/artifacts → completion-claim DAG;
+- state-aware check freshness and stale-evidence detection;
+- observed change and artifact inventories;
+- reproducible diagnostic findings with evidence basis;
 - explicit Observed / Derived / Inferred semantics;
 - privacy-preserving summaries and secret redaction;
 - historical StateSeal evidence shown as a read-only archive;
@@ -111,7 +116,8 @@ The default command surface is intentionally observational:
 | `seal version` | Show build identity |
 
 Managed execution, verification gates, admission, Apply, restore, lifecycle
-hook installation, and delivery-control MCP tools are not registered.
+hook installation, and delivery-control MCP tools are outside the supported
+product and are not registered by the CLI.
 
 ## Documentation
 

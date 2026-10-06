@@ -8,7 +8,8 @@ seal ui
 
 StateSeal はローカルの Codex セッションを読み取り専用で検出します。Hook、MCP、
 承認、Agent の制御は不要です。`COMPLETED` は Agent が完了を報告したことだけを
-意味し、コードの正しさを保証しません。
+意味し、コードの正しさを保証しません。画面はコード状態、変更、検査の鮮度、
+成果物、診断、監査タイムラインを表示します。
 
 分析は `Observed`、`Derived`、`Inferred` に分類されます。詳細は
 [英語ガイド](../getting-started.md)を参照してください。

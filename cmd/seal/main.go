@@ -55,7 +55,7 @@ func newRoot() *cobra.Command {
 	info := buildinfo.Current()
 	cmd := &cobra.Command{
 		Use:   "seal",
-		Short: "Read-only runtime intelligence for coding-agent delivery",
+		Short: "Read-only delivery intelligence for coding agents",
 		Long: "StateSeal observes coding-agent sessions and delivery evidence without " +
 			"starting, steering, blocking, approving, applying, or otherwise changing Agent execution.",
 		SilenceUsage:  true,

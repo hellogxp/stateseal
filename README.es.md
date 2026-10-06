@@ -5,10 +5,9 @@
 [Português do Brasil](README.pt-BR.md) · [Deutsch](README.de.md) ·
 [Français](README.fr.md)
 
-StateSeal es una **capa de inteligencia de ejecución de solo lectura** para
-agentes de programación. Reconstruye solicitudes, Skills, herramientas,
-artefactos, fallos y resultados comunicados por el Agent como un panorama en
-tiempo real.
+StateSeal es una **capa de inteligencia de entrega de solo lectura** para
+agentes de programación. Reconstruye solicitudes, estados de código observados,
+comprobaciones, artefactos, fallos y la declaración de finalización del Agent.
 
 Nunca inicia, dirige, bloquea, aprueba ni aplica trabajo del Agent. No instala
 hooks, no actúa como proxy del modelo y no modifica prompts ni ramas.

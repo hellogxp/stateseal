@@ -5,9 +5,9 @@
 [Português do Brasil](README.pt-BR.md) · [Deutsch](README.de.md) ·
 [Français](README.fr.md)
 
-StateSeal は Coding Agent 向けの**読み取り専用ランタイムインテリジェンス層**です。
-リクエスト、Skill、ツール、成果物、失敗、Agent が報告した結果をリアルタイムの
-全体図に再構成します。
+StateSeal は Coding Agent 向けの**読み取り専用デリバリーインテリジェンス層**です。
+リクエスト、観測されたコード状態、検査、成果物、失敗、Agent の完了報告を
+リアルタイムの全体図に再構成します。
 
 Agent の起動・誘導・停止・拒否・承認・Apply は行いません。Hook のインストール、
 モデル通信のプロキシ、Prompt やブランチの変更も行いません。

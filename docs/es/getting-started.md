@@ -9,7 +9,8 @@ seal ui
 StateSeal descubre sesiones locales de Codex en modo de solo lectura. No
 requiere hooks, MCP, aprobaciones ni control del Agent. `COMPLETED` solo indica
 que el Agent comunicó el final de la sesión; no garantiza que el código sea
-correcto.
+correcto. La vista muestra estados del código, cambios, actualidad de las
+comprobaciones, artefactos, diagnósticos y la línea temporal de auditoría.
 
 El análisis distingue `Observed`, `Derived` e `Inferred`. Consulta la
 [guía en inglés](../getting-started.md).

@@ -4,10 +4,9 @@
 [한국어](README.ko.md) · [Español](README.es.md) ·
 **Português do Brasil** · [Deutsch](README.de.md) · [Français](README.fr.md)
 
-StateSeal é uma **camada de inteligência de runtime somente leitura** para
-agentes de programação. Ela reconstrói solicitações, Skills, ferramentas,
-artefatos, falhas e resultados relatados pelo Agent em um panorama em tempo
-real.
+StateSeal é uma **camada de inteligência de entrega somente leitura** para
+agentes de programação. Ela reconstrói solicitações, estados de código
+observados, verificações, artefatos, falhas e a declaração de conclusão do Agent.
 
 Ela nunca inicia, orienta, bloqueia, aprova ou aplica o trabalho do Agent. Não
 instala hooks, não atua como proxy do modelo e não altera prompts ou branches.

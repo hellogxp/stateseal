@@ -1,87 +1,56 @@
-# Artifact evaluation
+# Product verification
 
-This guide verifies StateSeal from a source snapshot without relying on a
-public repository identity or GitHub Release assets. It is intended for
-double-anonymous review and also works with the **Full repo ZIP** provided by
-Anonymous GitHub.
+This guide verifies the supported StateSeal product: a local, read-only Agent
+delivery-intelligence layer.
 
-## Scope
+## Product invariants
 
-The artifact provides implementation-conformance evidence for the executable
-contract. It does not reproduce the paper's empirical results and does not
-establish that StateSeal improves repair competence, verifier quality, or
-general deployment reliability.
+The supported CLI must:
 
-The deterministic checks cover:
-
-- exact state and policy binding;
-- stale, copied, or edited evidence;
-- checkpoint preservation and fresh completion recertification;
-- typed outcomes, rejection, abstention, and escalation;
-- false-rejection and weak-gate visibility;
-- bounded loop and process-lifecycle behavior;
-- managed Go, Python, and Node project fixtures.
+- register only observational commands;
+- never start, steer, block, approve, restore, or apply Agent work;
+- keep legacy hook compatibility responses neutral;
+- expose local UI data through GET-only APIs;
+- distinguish Observed, Derived, and Inferred statements;
+- bind recognized checks to observed code revisions and mark stale evidence;
+- redact common secret patterns from displayed data.
 
 ## Requirements
 
 - Git
 - Go 1.24 or newer
-- Bash
-- `jq`
-- Python 3
-- Node.js
+- Node.js (JavaScript syntax validation)
+- `jq` (locale catalog validation)
+- Python 3 (documentation-language validation)
 
-The core build and Go test suite need only Git and Go. Python, Node.js, and
-`jq` are required by the complete conformance matrix.
-
-## Quick verification
-
-Download and extract the anonymous **Full repo ZIP**, then run:
+## Verify
 
 ```sh
-make build
-make test
-make lint
-make sealbench
-make stackbench
+go mod verify
+go test -race ./...
+go vet ./...
+go build -trimpath ./cmd/seal
+node --check internal/ui/web/app.js
+sh scripts/check-i18n.sh
 ```
 
-Expected terminal summaries include:
+The Go tests include command-surface, inert-compatibility, state-freshness,
+secret-redaction, local-server security-header, and API projection checks.
 
-```text
-SealBench passed 35/35 deterministic failure-injection cases.
-Stack matrix passed 3/3 ecosystems.
-```
-
-`make test` runs the Go suite with the race detector. `make sealbench` executes
-the SB001--SB035 catalog documented in
-[`sealbench/README.md`](sealbench/README.md). `make stackbench` exercises
-managed Go, Python, and Node fixtures.
-
-## Evidence boundary
-
-These checks demonstrate that the implementation enforces the tested contract
-obligations under the declared environment. They do not prove:
-
-- completeness or semantic correctness of a project's verifier suite;
-- independence of multiple verifiers;
-- trustworthiness of the host or runner;
-- improved useful-delivery rate on unseen projects;
-- absence of false rejection or abstention costs.
-
-See [`docs/threat-model.md`](docs/threat-model.md),
-[`docs/verification-model.md`](docs/verification-model.md), and
-[`docs/research-evidence.md`](docs/research-evidence.md) for the complete trust
-and claim boundaries.
-
-## Snapshot identity
-
-Record the evaluated source identity with:
+## Manual UI check
 
 ```sh
-git rev-parse HEAD 2>/dev/null || true
-./bin/seal version --json
+go run ./cmd/seal ui --no-open --address 127.0.0.1:9137
 ```
 
-An Anonymous GitHub ZIP may omit Git history, in which case the anonymous
-artifact page and the paper's artifact statement identify the frozen snapshot.
+Open `http://127.0.0.1:9137/` and confirm that the home view shows delivery
+sessions and the detail view shows current state, code delta, evidence graph,
+diagnostic findings, changes, checks, artifacts, and audit timeline. There must
+be no Agent-control action.
+
+## Claim boundary
+
+Passing these checks establishes implementation conformance to the tested
+read-only behavior. It does not establish semantic correctness of an Agent's
+code, completeness of its test suite, or correctness of every diagnostic
+inference.

@@ -1,31 +1,56 @@
-# Observation and attribution model
+# Observation and evidence model
 
-StateSeal separates data origin from analytical confidence.
+StateSeal separates source facts, reproducible correlations, and diagnostic
+hypotheses.
 
 ## Sources
 
-1. **Skill files**: declared name, description, scripts, references, assets.
-2. **Agent transcripts**: session, message, tool call, tool result, timing.
-3. **Local artifacts**: file and Git metadata when explicitly available.
-4. **Correlation**: relationships derived from IDs, paths, timestamps, and
-   deterministic rules.
+1. **Agent transcripts** — session, request, tool call/result, timing, and completion events.
+2. **Observed mutations** — supported patch/write events and their affected paths.
+3. **Recognized checks** — test, build, lint, typecheck, and static-analysis commands.
+4. **Git workspace metadata** — branch, commit, dirty-state digest, and diff statistics.
+5. **Artifacts** — supported reports, documents, images, and archives created in-session.
+
+StateSeal does not rely on model self-report to establish the code state or a
+check result. It uses recorded events and local read-only metadata.
 
 ## Evidence grades
 
-- **Observed**: copied from a supported source event.
-- **Derived**: reproducible correlation over observed data.
-- **Inferred**: a model or heuristic diagnosis.
+| Grade | Requirement | Example |
+| --- | --- | --- |
+| Observed | Directly present in a supported event | A command reported exit code 1 |
+| Derived | Deterministically reproducible | A passing check predates a later edit |
+| Inferred | Plausible but not proven | Current Git changes likely belong to this session |
 
-The UI must never silently upgrade Derived or Inferred information to Observed.
+The UI never silently upgrades Derived or Inferred information to Observed.
+
+## State and freshness
+
+An ordered mutation event advances the observed code revision from `S0` to
+`S1`, `S2`, and so on. A check is attached to the revision at which its command
+started. If the transcript later advances to another revision, that check is
+marked stale.
+
+This sequence-based model is intentionally conservative. It can detect
+verify-then-edit patterns but cannot prove that unobserved filesystem activity
+did or did not occur. Git metadata is therefore shown separately from
+transcript attribution.
 
 ## Claim limits
 
-StateSeal can say that a command was called or reported exit code zero. It
-cannot conclude that the model understood an instruction, that an unobserved
-Skill was considered, or that a change is semantically correct.
+StateSeal can state that a recognized command ran, what exit code was observed,
+which code revision preceded it, and whether later edits occurred. It cannot
+conclude that:
 
-## Non-intervention guarantee
+- all requirements were covered;
+- a passing test proves semantic correctness;
+- the Agent understood the request;
+- a completion claim is an approval;
+- an inferred causal explanation is certain.
 
-The supported product has no Agent launcher, lifecycle-hook installer, prompt
-rewriter, deny/block response, branch writer, approval handler, or Apply
-endpoint. Compatibility commands left by older releases return neutral results.
+## Privacy and integrity
+
+The supported UI is local and GET-only. Generic tool arguments are summarized,
+displayed outputs are bounded, common secret patterns are redacted, and parse
+gaps are surfaced as integrity warnings. StateSeal never sends a response,
+decision, prompt, or action back to the Agent.

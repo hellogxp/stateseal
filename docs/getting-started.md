@@ -10,47 +10,54 @@ export PATH="$HOME/.local/bin:$PATH"
 seal version
 ```
 
-## Open the runtime panorama
+## Open the delivery panorama
 
 ```bash
 seal ui
 ```
 
 StateSeal opens a local browser view and passively discovers recent supported
-Agent transcripts. No project initialization, Agent integration, Hook, MCP
-server, policy, or approval is required.
+Agent transcripts. There is no project initialization, Agent integration,
+hook, proxy, policy, approval, or background daemon.
 
-Use a fixed port or avoid opening the browser:
+Use a fixed loopback port or avoid opening a browser:
 
 ```bash
 seal ui --address 127.0.0.1:9137
 seal ui --no-open
 ```
 
-## Read the graph
-
-The graph presents a reconstructed execution chain:
+## Read a delivery session
 
 ```text
-Agent session → Skill attribution → tool calls → observed outcome
+Delivery request
+      ↓
+Observed code states ──→ checks bound to each observed state
+      ├────────────────→ created artifacts
+      └────────────────→ Agent completion claim
 ```
 
-- **Observed** means the signal is present in a transcript.
-- **Derived** means StateSeal correlated observed identifiers or paths.
-- **Inferred** means a diagnostic hypothesis and may be wrong.
+Start with the diagnostic banner, then inspect:
 
-“Completed” means the Agent reported session completion. It does not mean the
-change is semantically correct, production-ready, or approved.
+1. **Current workspace state** — branch, commit/dirty digest, and code delta.
+2. **Checks and evidence freshness** — whether a recognized check ran before
+   or after the latest observed edit.
+3. **Diagnostic findings** — the exact observed or derived basis for a warning.
+4. **Audit timeline** — a sanitized sequence of source events.
+
+`Evidence current` means at least one recognized passing check belongs to the
+latest observed state. It does not mean all requirements were tested, the code
+is semantically correct, or the delivery is approved.
 
 ## Privacy defaults
 
-StateSeal runs on loopback, does not upload session data, summarizes tool input,
-does not expose raw tool output by default, and redacts common token patterns
-from displayed request summaries. Treat local transcripts as sensitive data.
+StateSeal listens on loopback, does not upload session data, hides raw generic
+tool arguments, bounds displayed output, and redacts common token patterns.
+Local Agent transcripts can still be sensitive; protect them as development
+credentials and logs.
 
-## Remove obsolete integrations
+## Compatibility
 
-Current StateSeal does not install integrations. If an older release installed
-Agent lifecycle hooks or a StateSeal MCP entry, remove those entries from the
-Agent configuration. Until removed, the upgraded binary keeps legacy hook
-commands inert and always returns a neutral result.
+The first supported source is Codex JSONL. StateSeal parses it defensively and
+shows an integrity warning rather than inventing missing facts. Source adapters
+for other Agents should remain read-only and versioned independently.
